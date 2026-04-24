@@ -1,12 +1,14 @@
 import { RouterProvider } from "react-router";
 import { router } from "./routes";
-import { SafeBot } from "./components/SafeBot";
+import { Suspense } from "react";
+import { AuthProvider } from "./contexts/AuthContext";
 
 export default function App() {
   return (
-    <>
-      <RouterProvider router={router} />
-      <SafeBot />
-    </>
+    <AuthProvider>
+      <Suspense fallback={<div>Loading...</div>}>
+        <RouterProvider router={router} />
+      </Suspense>
+    </AuthProvider>
   );
 }

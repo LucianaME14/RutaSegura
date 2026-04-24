@@ -1,0 +1,36 @@
+services:
+  - type: web
+    name: rutasegura-api
+    runtime: dotnet
+    plan: free
+    rootDir: .
+    buildCommand: dotnet publish backend/RutaSegura.csproj -c Release -o out
+    startCommand: dotnet out/RutaSegura.dll
+    healthCheckPath: /swagger
+    envVars:
+      - key: ASPNETCORE_ENVIRONMENT
+        value: Production
+      - key: ASPNETCORE_URLS
+        value: http://0.0.0.0:$PORT
+      - key: ConnectionStrings__DefaultConnection
+        value: Data Source=/var/data/rutasegura.db
+      - key: Jwt__Issuer
+        value: RutaSegura.API
+      - key: Jwt__Audience
+        value: RutaSegura.Client
+      - key: Jwt__Key
+        generateValue: true
+      - key: Redis__ConnectionString
+        fromService:
+          name: rutasegura-redis
+          type: redis
+          property: connectionString
+    disks:
+      - name: rutasegura-data
+        mountPath: /var/data
+        sizeGB: 1
+
+  - type: redis
+    name: rutasegura-redis
+    plan: free
+    maxmemoryPolicy: allkeys-lru

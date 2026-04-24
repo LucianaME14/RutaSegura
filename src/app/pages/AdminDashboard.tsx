@@ -1,0 +1,375 @@
+import { useCallback, useEffect, useState } from "react";
+import {
+  LineChart,
+  Line,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  CartesianGrid,
+} from "recharts";
+import {
+  Sparkles,
+  Users,
+  AlertTriangle,
+  MapPin,
+  Bell,
+  RefreshCw,
+} from "lucide-react";
+import { apiUrl, readApiErrorMessage } from "../lib/api";
+
+type ResumenApi = {
+  usuariosActivos: number;
+  reportesPendientes: number;
+  rutasConsultadas7Dias: number;
+  alertasEmitidas7Dias: number;
+  deltas: {
+    usuariosRegistradosSemana: number;
+    reportesCreadosSemana: number;
+    rutasConsultadasSemana: number;
+    reportesPendientesVsDia: number;
+    alertasSemana: number;
+  };
+  volumenPorDia: { fecha: string; reportes: number }[];
+  zonasRiesgo: {
+    titulo: string;
+    riesgoPorcentaje: number;
+    horarioSugerido: string;
+  }[];
+};
+
+function formatDelta(pct: number) {
+  if (pct > 0) return `+${pct}% en la semana`;
+  if (pct < 0) return `${pct}% respecto al periodo anterior`;
+  return "sin cambio vs. periodo anterior";
+}
+
+function barColor(pct: number) {
+  if (pct >= 80) return "bg-rose-500";
+  if (pct >= 60) return "bg-orange-500";
+  return "bg-amber-500";
+}
+
+export default function AdminDashboard() {
+  const [data, setData] = useState<ResumenApi | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [err, setErr] = useState<string | null>(null);
+  const [genMsg, setGenMsg] = useState<string | null>(null);
+  const [genLoading, setGenLoading] = useState(false);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setErr(null);
+    try {
+      const r = await fetch(apiUrl("/api/Admin/resumen"));
+      if (!r.ok) {
+        const msg = await readApiErrorMessage(
+          r,
+          "El servidor no devolvió el resumen.",
+        );
+        throw new Error(msg);
+      }
+      const j = (await r.json()) as ResumenApi;
+      setData(j);
+    } catch (e) {
+      if (e instanceof TypeError) {
+        setErr(
+          "No hay conexión con la API. Arranca en la carpeta `backend` el comando `dotnet run` (debe quedar en http://localhost:5000) y en otra ventana `npm run dev` para Vite. Si usas un build o `vite preview` sin proxy, añade en la raíz del front un `.env` con: VITE_API_URL=http://127.0.0.1:5000",
+        );
+      } else {
+        setErr(
+          e instanceof Error ? e.message : "Error al cargar el resumen",
+        );
+      }
+      setData(null);
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const chartData =
+    data?.volumenPorDia.map((d) => {
+      const date = new Date(d.fecha);
+      const day = date.toLocaleDateString("es-PE", { weekday: "short" });
+      return { day, reportes: d.reportes };
+    }) ?? [];
+
+  const onGenerar = async () => {
+    setGenLoading(true);
+    setGenMsg(null);
+    try {
+      const r = await fetch(apiUrl("/api/Admin/alertas/generar"), {
+        method: "POST",
+      });
+      const j = await r.json();
+      if (!r.ok) throw new Error(j?.message || "Error");
+      setGenMsg(
+        typeof j.creadas === "number" && j.creadas > 0
+          ? `Se generaron ${j.creadas} alertas y se guardaron en la base.`
+          : (j.message as string) || "Listo.",
+      );
+      load();
+    } catch {
+      setGenMsg("No se pudo generar alertas (comprueba que haya reportes en los últimos 7 días).");
+    } finally {
+      setGenLoading(false);
+    }
+  };
+
+  if (loading && !data && !err) {
+    return (
+      <div className="py-20 text-center text-slate-500">Cargando tablero…</div>
+    );
+  }
+  if (err) {
+    return (
+      <div className="space-y-4 animate-in fade-in duration-500 pb-10 max-w-2xl">
+        <h1 className="text-3xl font-black text-slate-900">Dashboard</h1>
+        <div className="rounded-2xl border border-rose-200 bg-rose-50 p-6 text-rose-900">
+          <p className="font-bold text-rose-950">No se pudo cargar el resumen</p>
+          <p className="mt-2 text-sm text-rose-800/90 whitespace-pre-wrap">
+            {err}
+          </p>
+          {err.includes("SQL") || err.includes("500") ? (
+            <p className="mt-3 text-sm text-rose-800">
+              Si acabas de clonar el proyecto, en `backend` ejecuta{" "}
+              <code className="text-xs bg-white/80 px-1 rounded">dotnet ef database update</code>{" "}
+              y reinicia la API.
+            </p>
+          ) : null}
+        </div>
+        <div className="rounded-2xl border border-slate-200 bg-white p-5 text-sm text-slate-600 space-y-2">
+          <p className="font-bold text-slate-800">Checklist rápido</p>
+          <ul className="list-disc pl-5 space-y-1">
+            <li>
+              Terminal 1: carpeta <code>backend</code> → <code>dotnet run</code>
+            </li>
+            <li>
+              Terminal 2: raíz del proyecto → <code>npm run dev</code> → abre la URL
+              (p. ej. http://localhost:5173)
+            </li>
+            <li>Entra otra vez al admin tras iniciar el backend</li>
+          </ul>
+        </div>
+        <button
+          type="button"
+          onClick={() => void load()}
+          className="inline-flex items-center gap-2 rounded-2xl bg-slate-900 px-5 py-3 text-sm font-bold text-white transition hover:bg-slate-800"
+        >
+          <RefreshCw className="w-4 h-4" />
+          Reintentar
+        </button>
+      </div>
+    );
+  }
+  if (!data) return null;
+
+  return (
+    <div className="space-y-8 animate-in fade-in duration-500 pb-10">
+      {genMsg ? (
+        <div className="rounded-2xl border border-indigo-200 bg-indigo-50 px-4 py-3 text-sm text-indigo-900">
+          {genMsg}
+        </div>
+      ) : null}
+      <div className="flex flex-col gap-4 md:flex-row md:items-end md:justify-between">
+        <div>
+          <h1 className="text-3xl font-black text-slate-900">
+            Dashboard Administrativo
+          </h1>
+          <p className="mt-2 text-slate-500">
+            Resumen con datos reales (SQLite) y análisis por reportes
+            recientes.
+          </p>
+        </div>
+      </div>
+
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="flex items-center justify-between gap-4">
+            <div className="rounded-3xl bg-slate-100 p-3 text-slate-800">
+              <Users className="w-5 h-5" />
+            </div>
+            <span
+              className={`text-xs font-bold ${data.deltas.usuariosRegistradosSemana >= 0 ? "text-emerald-600" : "text-rose-600"}`}
+            >
+              {formatDelta(data.deltas.usuariosRegistradosSemana)}
+            </span>
+          </div>
+          <h3 className="mt-6 text-3xl font-black text-slate-900">
+            {data.usuariosActivos.toLocaleString("es-PE")}
+          </h3>
+          <p className="mt-2 text-sm text-slate-500">Usuarios activos</p>
+        </div>
+
+        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="flex items-center justify-between gap-4">
+            <div className="rounded-3xl bg-rose-100 p-3 text-rose-700">
+              <AlertTriangle className="w-5 h-5" />
+            </div>
+            <span
+              className={`text-xs font-bold ${data.deltas.reportesPendientesVsDia >= 0 ? "text-amber-600" : "text-emerald-600"}`}
+            >
+              {formatDelta(data.deltas.reportesPendientesVsDia)} (pend. nuevos)
+            </span>
+          </div>
+          <h3 className="mt-6 text-3xl font-black text-slate-900">
+            {data.reportesPendientes}
+          </h3>
+          <p className="mt-2 text-sm text-slate-500">Reportes pendientes</p>
+        </div>
+
+        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="flex items-center justify-between gap-4">
+            <div className="rounded-3xl bg-emerald-100 p-3 text-emerald-700">
+              <MapPin className="w-5 h-5" />
+            </div>
+            <span
+              className={`text-xs font-bold ${data.deltas.rutasConsultadasSemana >= 0 ? "text-emerald-600" : "text-rose-600"}`}
+            >
+              {formatDelta(data.deltas.rutasConsultadasSemana)}
+            </span>
+          </div>
+          <h3 className="mt-6 text-3xl font-black text-slate-900">
+            {data.rutasConsultadas7Dias.toLocaleString("es-PE")} (7d)
+          </h3>
+          <p className="mt-2 text-sm text-slate-500">Rutas guardadas (hist.)</p>
+        </div>
+
+        <div className="rounded-3xl border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="flex items-center justify-between gap-4">
+            <div className="rounded-3xl bg-amber-100 p-3 text-amber-800">
+              <Bell className="w-5 h-5" />
+            </div>
+            <span
+              className={`text-xs font-bold ${data.deltas.alertasSemana >= 0 ? "text-emerald-600" : "text-rose-600"}`}
+            >
+              {formatDelta(data.deltas.alertasSemana)}
+            </span>
+          </div>
+          <h3 className="mt-6 text-3xl font-black text-slate-900">
+            {data.alertasEmitidas7Dias}
+          </h3>
+          <p className="mt-2 text-sm text-slate-500">Alertas sistema (7d)</p>
+        </div>
+      </div>
+
+      <div className="grid gap-6 xl:grid-cols-[1.4fr_0.6fr]">
+        <div className="rounded-[2rem] border border-slate-200 bg-white p-6 shadow-sm">
+          <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <div>
+              <h2 className="text-xl font-black text-slate-900">
+                Volumen de reportes (últimos 7 días)
+              </h2>
+              <p className="mt-1 text-sm text-slate-500">
+                Cuenta real de <code className="text-xs">Reportes</code> por
+                fecha.
+              </p>
+            </div>
+            <span className="rounded-3xl border border-slate-200 bg-slate-100 px-4 py-2 text-sm font-bold text-slate-700">
+              Últimos 7 días
+            </span>
+          </div>
+
+          <div className="mt-6 h-[320px]">
+            {chartData.length === 0 || chartData.every((c) => c.reportes === 0) ? (
+              <div className="grid h-full place-items-center text-sm text-slate-500">
+                Aún no hay reportes en el periodo. Los gráficos se rellenan
+                automáticamente.
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart
+                  data={chartData}
+                  margin={{ top: 10, right: 10, left: -20, bottom: 0 }}
+                >
+                  <CartesianGrid stroke="#e2e8f0" strokeDasharray="3 3" />
+                  <XAxis
+                    dataKey="day"
+                    tickLine={false}
+                    axisLine={false}
+                    tick={{ fill: "#64748b", fontSize: 12 }}
+                  />
+                  <YAxis
+                    tickLine={false}
+                    axisLine={false}
+                    tick={{ fill: "#64748b", fontSize: 12 }}
+                    allowDecimals={false}
+                  />
+                  <Tooltip
+                    contentStyle={{ borderRadius: 20, borderColor: "#e2e8f0" }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="reportes"
+                    stroke="#4f46e5"
+                    strokeWidth={3}
+                    dot={{ r: 3, fill: "#4f46e5" }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
+          </div>
+        </div>
+
+        <div className="rounded-[2rem] border border-slate-200 bg-slate-950 p-6 shadow-lg shadow-slate-900/5 text-white">
+          <div className="mb-6 flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-black">Riesgo por zona (agregado)</h2>
+              <p className="mt-1 text-sm text-slate-300">
+                Agrupación de reportes por <strong>texto de ubicación</strong>{" "}
+                (últimos 7 días).
+              </p>
+            </div>
+            <Sparkles className="w-6 h-6 text-indigo-400" />
+          </div>
+
+          {data.zonasRiesgo.length === 0 ? (
+            <p className="text-sm text-slate-400">
+              Sin reportes aún. Cuando haya incidencias, verás el ranking aquí.
+            </p>
+          ) : (
+            <div className="space-y-4">
+              {data.zonasRiesgo.map((item) => (
+                <div
+                  key={item.titulo}
+                  className="rounded-3xl bg-slate-900/80 p-4"
+                >
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <h3 className="font-bold text-slate-100">{item.titulo}</h3>
+                      <p className="mt-1 text-xs text-slate-400">
+                        {item.horarioSugerido}
+                      </p>
+                    </div>
+                    <span className="text-sm font-black text-white">
+                      {item.riesgoPorcentaje}%
+                    </span>
+                  </div>
+                  <div className="mt-4 h-2 overflow-hidden rounded-full bg-slate-800">
+                    <div
+                      className={`h-full rounded-full ${barColor(item.riesgoPorcentaje)}`}
+                      style={{ width: `${item.riesgoPorcentaje}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+
+          <button
+            type="button"
+            disabled={genLoading}
+            onClick={onGenerar}
+            className="mt-6 w-full rounded-3xl bg-indigo-600 px-5 py-4 text-sm font-bold text-white transition hover:bg-indigo-500 disabled:opacity-60"
+          >
+            {genLoading ? "Generando…" : "Generar alertas preventivas (guarda en BD)"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
