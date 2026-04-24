@@ -19,7 +19,9 @@
     "paths": {
       "@/*": ["src/*"]
     },
+    "ignoreDeprecations": "6.0",
+    "forceConsistentCasingInFileNames": true,
     "types": ["node"]
   },
-  "include": ["src", "vite.config.ts"]
+  "include": ["src", "vite.config.ts", "vite-env.d.ts"]
 }

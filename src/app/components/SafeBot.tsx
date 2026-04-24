@@ -93,12 +93,8 @@ export function SafeBot() {
                   </span>
                 </div>
               </div>
-
               <button
-                type="button"
                 onClick={() => setIsOpen(false)}
-                aria-label="Cerrar chat"
-                title="Cerrar chat"
                 className="hover:bg-white/10 p-2 rounded-xl transition-colors text-slate-200 hover:text-white"
               >
                 <X className="w-5 h-5" />
@@ -109,9 +105,7 @@ export function SafeBot() {
               {messages.map((msg, idx) => (
                 <div
                   key={idx}
-                  className={`flex ${
-                    msg.sender === "user" ? "justify-end" : "justify-start"
-                  }`}
+                  className={`flex ${msg.sender === "user" ? "justify-end" : "justify-start"}`}
                 >
                   <div
                     className={`max-w-[85%] rounded-2xl px-4 py-3 shadow-sm font-medium leading-relaxed ${
@@ -140,12 +134,9 @@ export function SafeBot() {
                   className="w-full bg-slate-100 border-none rounded-2xl px-4 py-3.5 text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500 font-medium text-slate-900"
                 />
               </div>
-
               <button
                 type="submit"
                 disabled={!input.trim()}
-                aria-label="Enviar mensaje"
-                title="Enviar mensaje"
                 className="bg-indigo-600 text-white p-3.5 rounded-2xl hover:bg-indigo-700 transition-colors flex-shrink-0 shadow-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Send className="w-5 h-5" />
@@ -156,16 +147,12 @@ export function SafeBot() {
       </AnimatePresence>
 
       <motion.button
-        type="button"
         whileHover={{ scale: 1.05 }}
         whileTap={{ scale: 0.95 }}
         onClick={() => setIsOpen(!isOpen)}
-        aria-label={isOpen ? "Cerrar SafeBot" : "Abrir SafeBot"}
-        title={isOpen ? "Cerrar SafeBot" : "Abrir SafeBot"}
         className="w-16 h-16 bg-indigo-600 text-white rounded-2xl shadow-xl flex items-center justify-center hover:bg-indigo-700 transition-colors border border-indigo-500 group relative"
       >
         {isOpen ? <X className="w-7 h-7" /> : <Sparkles className="w-7 h-7" />}
-
         {!isOpen && (
           <span className="absolute -top-2 -right-2 flex h-4 w-4">
             <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>

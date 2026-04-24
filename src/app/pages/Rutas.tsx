@@ -1,93 +1,404 @@
-import { useState, useEffect } from "react";
-import { Navigation, MapPin, Search, ShieldCheck, Clock, Activity, Footprints, Bike, AlertTriangle, Navigation2, CheckCircle2, ShieldAlert, Phone, Map } from "lucide-react";
+import { useState, useCallback, useMemo } from "react";
+import { useAuth } from "../contexts/AuthContext";
+import { authJsonHeaders } from "../lib/api";
+import {
+  Navigation,
+  MapPin,
+  Search,
+  ShieldCheck,
+  Clock,
+  Activity,
+  Footprints,
+  Bike,
+  CheckCircle2,
+  ShieldAlert,
+  Map,
+} from "lucide-react";
+import { useJsApiLoader } from "@react-google-maps/api";
+import { RutaMapaBusqueda } from "../components/RutaMapaBusqueda";
+import { buildRoutePath, haversineKm, hashString } from "../lib/geo";
+import { getGoogleMapsApiKey, getGoogleMapsLoaderConfig, GOOGLE_MAPS_SCRIPT_ID } from "../lib/mapsEnv";
+import {
+  buildPeruGeocodeQuery,
+  pickBestGeocodeResult,
+  LIMA_METRO_BOUNDS,
+  origenPideGpsFijo,
+} from "../lib/limaGeocode";
+import type { LatLngLiteral } from "../types/maps";
 
-export function Rutas() {
-  // Estados para simular el flujo completo
-  const [step, setStep] = useState<"buscar" | "alternativas" | "navegando">("buscar");
+type RutaOpcion = {
+  id: string;
+  tag: string;
+  tagClass: string;
+  nombre: string;
+  nivel: string;
+  nivelClass: string;
+  descripcion: string;
+  minutos: number;
+  km: number;
+  color: string;
+  path: LatLngLiteral[];
+};
+
+const descSeguras = [
+  "Evita callejones y prioriza avenidas con buena iluminación y presencia de serenazgo.",
+  "Rodea el parque reportado y pasa cerca de estaciones de policía y comercio abierto.",
+  "Usa vías con más cámaras municipales; el recorrido es un poco más largo pero más expuesto.",
+];
+
+const descRapidas = [
+  "Atajo directo: menos metros, cruza cerca de una zona con reportes de iluminación baja.",
+  "Tramo más corto; incluye 1 pasaje estrecho — úsalo solo de día si te sientes inseguro.",
+  "Corta por una ciclovía con poco tráfico; revisa el pavimento cerca de la berma.",
+];
+
+const descEquilibradas = [
+  "Balance entre distancia y seguridad: mezcla avenida principal con calle secundaria con cámaras.",
+  "Alterna entre zona comercial (más gente) y tramo residencial con buen alumbrado.",
+  "Pasa frente a un mercado (ambiente concurrido) y luego reincorpora a avenida amplia.",
+];
+
+function geocodificarDireccion(
+  address: string,
+): Promise<LatLngLiteral> {
+  return new Promise((resolve, reject) => {
+    const g = new google.maps.Geocoder();
+    const q = buildPeruGeocodeQuery(address);
+    const bounds = new google.maps.LatLngBounds(
+      {
+        lat: LIMA_METRO_BOUNDS.south,
+        lng: LIMA_METRO_BOUNDS.west,
+      } as google.maps.LatLngLiteral,
+      {
+        lat: LIMA_METRO_BOUNDS.north,
+        lng: LIMA_METRO_BOUNDS.east,
+      } as google.maps.LatLngLiteral,
+    );
+    g.geocode(
+      {
+        address: q,
+        region: "pe",
+        componentRestrictions: { country: "pe" },
+        bounds,
+      },
+      (results, status) => {
+        if (status !== "OK" || !results?.length) {
+          reject(
+            new Error(
+              "No se encontró esa dirección. Incluye distrito o referencia; si escribes solo \"Lima\", procura calle, número o código postal (ej. 15xxx).",
+            ),
+          );
+          return;
+        }
+        const best = pickBestGeocodeResult(results, address);
+        const l = best.geometry.location;
+        resolve({ lat: l.lat(), lng: l.lng() });
+      },
+    );
+  });
+}
+
+/**
+ * Si el origen es la plantilla "Mi ubicación…" y el usuario quiere GPS → coordenadas reales.
+ * Si escribió calle, urbanización, distrito → geocodificar (no forzar el centro de Lima).
+ */
+function resolverOrigen(
+  origenTexto: string,
+  usarGpsOrigen: boolean,
+): Promise<LatLngLiteral> {
+  const raw = origenTexto.trim();
+  const soloGps = origenPideGpsFijo(raw);
+
+  if (usarGpsOrigen && soloGps) {
+    if (!navigator.geolocation) {
+      return Promise.reject(
+        new Error(
+          "Tu navegador no soporta GPS. Escribe el origen como dirección en el campo, o desmarca la casilla e indica calle y distrito en Lima.",
+        ),
+      );
+    }
+    return new Promise((resolve, reject) => {
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          resolve({
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+          });
+        },
+        () => {
+          reject(
+            new Error(
+              "No se pudo leer el GPS. Activa el permiso de ubicación, o escribe el origen como calle, distrito, Lima/Perú.",
+            ),
+          );
+        },
+        { enableHighAccuracy: true, maximumAge: 0, timeout: 20000 },
+      );
+    });
+  }
+
+  if (soloGps && !usarGpsOrigen) {
+    return Promise.reject(
+      new Error(
+        "Marca «Usar mi ubicación (GPS)» y acepta el permiso, o reemplaza el texto por la dirección de partida (calle, urbanización, distrito, Lima).",
+      ),
+    );
+  }
+
+  if (!raw) {
+    return Promise.reject(
+      new Error(
+        "Indica un origen: deja «Mi ubicación actual» y GPS, o escribe una dirección o lugar en el área de Lima y Callao.",
+      ),
+    );
+  }
+
+  return geocodificarDireccion(raw);
+}
+
+function generarRutas(
+  origin: LatLngLiteral,
+  dest: LatLngLiteral,
+  mode: "pedestrian" | "bike",
+  destinoTexto: string,
+): RutaOpcion[] {
+  const h = hashString(destinoTexto + mode);
+  const baseDist = Math.max(0.35, haversineKm(origin, dest));
+  const speed = mode === "bike" ? 14 : 5;
+  const minBase = (baseDist / speed) * 60;
+
+  const jitter = (i: number) => 1 + ((h >> (i * 3)) % 13) / 100;
+  const pick = (arr: string[], i: number) => arr[(h + i) % arr.length];
+
+  const d1 = baseDist * 1.08 * jitter(1);
+  const d2 = baseDist * 0.92 * jitter(2);
+  const d3 = baseDist * 1.0 * jitter(3);
+
+  const t1 = Math.max(5, Math.round((d1 / speed) * 60 * jitter(4)));
+  const t2 = Math.max(4, Math.round((d2 / speed) * 60 * jitter(5)));
+  const t3 = Math.max(4, Math.round((d3 / speed) * 60 * jitter(6)));
+
+  return [
+    {
+      id: "safe",
+      tag: "MÁS SEGURA",
+      tagClass: "bg-emerald-500",
+      nombre: h % 2 === 0 ? "Ruta Resguardada" : "Ruta Iluminada",
+      nivel: "Nivel: Alto",
+      nivelClass: "text-emerald-600",
+      descripcion: pick(descSeguras, 0),
+      minutos: t1,
+      km: d1,
+      color: "#10b981",
+      path: buildRoutePath(origin, dest, 0),
+    },
+    {
+      id: "fast",
+      tag: "MÁS RÁPIDA",
+      tagClass: "bg-amber-500",
+      nombre: h % 3 === 0 ? "Atajo Norte" : h % 3 === 1 ? "Conexión Miraflores" : "Atajo Sur",
+      nivel: "Nivel: Medio",
+      nivelClass: "text-amber-600",
+      descripcion: pick(descRapidas, 1),
+      minutos: t2,
+      km: d2,
+      color: "#f59e0b",
+      path: buildRoutePath(origin, dest, 1),
+    },
+    {
+      id: "balanced",
+      tag: "EQUILIBRADA",
+      tagClass: "bg-blue-500",
+      nombre: h % 2 === 0 ? "Ruta Mixta" : "Ruta de Corredor",
+      nivel: "Nivel: Medio–Alto",
+      nivelClass: "text-blue-600",
+      descripcion: pick(descEquilibradas, 2),
+      minutos: t3,
+      km: d3,
+      color: "#3b82f6",
+      path: buildRoutePath(origin, dest, 2),
+    },
+  ];
+}
+
+export default function Rutas() {
+  const { token } = useAuth();
+  const mapKey = getGoogleMapsApiKey();
+  const { isLoaded: mapsReady } = useJsApiLoader(
+    mapKey
+      ? getGoogleMapsLoaderConfig(mapKey)
+      : { id: GOOGLE_MAPS_SCRIPT_ID, googleMapsApiKey: "" },
+  );
+
+  const [step, setStep] = useState<"buscar" | "alternativas" | "navegando">(
+    "buscar",
+  );
   const [isSearching, setIsSearching] = useState(false);
   const [mode, setMode] = useState<"pedestrian" | "bike">("pedestrian");
+  const [origenTexto, setOrigenTexto] = useState("Mi ubicación actual");
+  const [destinoTexto, setDestinoTexto] = useState("");
+  const [searchError, setSearchError] = useState<string | null>(null);
 
-  const handleSearch = (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSearching(true);
-    setTimeout(() => {
-      setIsSearching(false);
-      setStep("alternativas");
-    }, 1500);
-  };
+  const [origen, setOrigen] = useState<LatLngLiteral | null>(null);
+  const [dest, setDest] = useState<LatLngLiteral | null>(null);
+  const [opciones, setOpciones] = useState<RutaOpcion[]>([]);
+  const [rutaElegida, setRutaElegida] = useState<RutaOpcion | null>(null);
+  const [usarGpsOrigen, setUsarGpsOrigen] = useState(true);
 
-  const startNavigation = () => {
+  const startNavigation = useCallback((r: RutaOpcion) => {
+    setRutaElegida(r);
     setStep("navegando");
+  }, []);
+
+  const registrarBusquedaEnHistorial = useCallback(
+    async (
+      opts: RutaOpcion[],
+      origenT: string,
+      destT: string,
+      transportMode: "pedestrian" | "bike",
+    ) => {
+      if (!token) return;
+      const ref = opts.find((x) => x.id === "safe") ?? opts[0]!;
+      try {
+        const r = await fetch("/api/RutasHistorial/mias", {
+          method: "POST",
+          headers: authJsonHeaders(token),
+          body: JSON.stringify({
+            OrigenTexto: origenT,
+            DestinoTexto: destT,
+            Modo: transportMode === "pedestrian" ? "peaton" : "bike",
+            MinutosAprox: ref.minutos,
+            KmAprox: ref.km,
+            RutaReferencia: ref.nombre,
+          }),
+        });
+        if (!r.ok) {
+          // historial no bloquea la búsqueda
+          return;
+        }
+      } catch {
+        // red / servidor no bloquea la búsqueda
+      }
+    },
+    [token],
+  );
+
+  const handleSearch = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!mapKey) {
+      setSearchError("Configura VITE_GOOGLE_MAPS_API_KEY en .env");
+      return;
+    }
+    if (!mapsReady || !window.google?.maps) {
+      setSearchError("Mapa aún cargando, espera un momento.");
+      return;
+    }
+    if (!destinoTexto.trim()) {
+      setSearchError("Escribe un destino en Lima.");
+      return;
+    }
+    setIsSearching(true);
+    setSearchError(null);
+    try {
+      const o = await resolverOrigen(origenTexto, usarGpsOrigen);
+      const d = await geocodificarDireccion(destinoTexto.trim());
+      setOrigen(o);
+      setDest(d);
+      const opts = generarRutas(o, d, mode, destinoTexto);
+      setOpciones(opts);
+      setStep("alternativas");
+      void registrarBusquedaEnHistorial(
+        opts,
+        origenTexto.trim() || "Origen",
+        destinoTexto.trim(),
+        mode,
+      );
+    } catch (err) {
+      setSearchError(
+        err instanceof Error ? err.message : "Error al buscar la ruta.",
+      );
+    } finally {
+      setIsSearching(false);
+    }
   };
 
-  // Pantalla 17: Seguimiento en tiempo real + Pantalla 18: SOS + Pantalla 19: Check-in
-  if (step === "navegando") {
+  const capasMapa = useMemo(() => {
+    if (step !== "alternativas" || !origen || !dest || opciones.length === 0) {
+      return [];
+    }
+    return opciones.map((op) => ({
+      id: op.id,
+      color: op.color,
+      path: op.path,
+      opacity: 0.5,
+    }));
+  }, [step, origen, dest, opciones]);
+
+  if (step === "navegando" && rutaElegida && origen && dest) {
     return (
       <div className="h-[calc(100vh-120px)] flex flex-col animate-in fade-in zoom-in-95 duration-500 relative">
-        {/* Cabecera de Navegación */}
         <div className="bg-indigo-600 text-white p-4 rounded-t-3xl shadow-lg z-10 flex items-center gap-4">
           <div className="bg-indigo-800 p-3 rounded-xl">
             <Navigation className="w-8 h-8 text-indigo-200" />
           </div>
           <div className="flex-1">
-            <h2 className="text-2xl font-black">Sigue derecho</h2>
-            <p className="text-indigo-200 font-medium text-sm">hacia Av. Universitaria • Llegada: 18:45 (15 min)</p>
+            <h2 className="text-2xl font-black">Navegando: {rutaElegida.nombre}</h2>
+            <p className="text-indigo-200 font-medium text-sm">
+              ~{rutaElegida.minutos} min estimados · {rutaElegida.km.toFixed(2)} km
+            </p>
           </div>
           <div className="bg-emerald-500 px-3 py-1 rounded-lg border border-emerald-400">
             <span className="text-xs font-bold block text-center">Score</span>
-            <span className="text-lg font-black">98%</span>
+            <span className="text-lg font-black">
+              {80 + (hashString(rutaElegida.id) % 19)}%
+            </span>
           </div>
         </div>
 
-        {/* Mapa Simulado de Navegación */}
-        <div className="flex-1 bg-slate-100 relative overflow-hidden border-x border-slate-200">
-          <img 
-            src="https://images.unsplash.com/photo-1759802524049-2421ddaee0fe?crop=entropy&cs=tinysrgb&fit=max&fm=jpg&ixid=M3w3Nzg4Nzd8MHwxfHNlYXJjaHwxfHxjaXR5JTIwbWFwJTIwbmF2aWdhdGlvbnxlbnwxfHx8fDE3NzQ2MTMxMTB8MA&ixlib=rb-4.1.0&q=80&w=1080" 
-            className="w-full h-full object-cover opacity-80" 
-            alt="City Map Navigation" 
-          />
-          
-          {/* Ruta dibujada simulada */}
-          <div className="absolute top-1/4 left-1/4 w-1/2 h-1/2 border-l-8 border-b-8 border-indigo-600 rounded-bl-3xl opacity-80 z-0"></div>
-
-          {/* Marcador del usuario */}
-          <div className="absolute top-[40%] left-[25%] -translate-x-1/2 -translate-y-1/2 flex flex-col items-center">
-            <div className="w-20 h-20 bg-indigo-500/30 rounded-full animate-ping absolute -z-10"></div>
-            <div className="bg-white text-indigo-600 p-2 rounded-full shadow-xl border-4 border-indigo-600 rotate-45">
-              <Navigation className="w-6 h-6 fill-indigo-600" />
+        <div className="flex-1 min-h-[280px] relative">
+          {mapKey ? (
+            <RutaMapaBusqueda
+              origin={origen}
+              dest={dest}
+              paths={[
+                {
+                  id: "nav",
+                  color: rutaElegida.color,
+                  path: rutaElegida.path,
+                  opacity: 0.9,
+                },
+              ]}
+              height={400}
+              highlightId="nav"
+            />
+          ) : (
+            <div className="h-full bg-slate-200 grid place-items-center p-4">
+              Sin clave de mapa
             </div>
-          </div>
-          
-          {/* Alerta en ruta */}
-          <div className="absolute top-[25%] left-[50%] flex items-center gap-2 bg-amber-100 border border-amber-300 text-amber-800 px-3 py-2 rounded-xl shadow-lg font-bold text-xs">
-            <AlertTriangle className="w-4 h-4" /> Desvío por obra
-          </div>
-
-          {/* Botón flotante Compartir (Pantalla 16) */}
-          <button className="absolute top-4 right-4 bg-white/90 backdrop-blur px-4 py-3 rounded-2xl shadow-lg border border-slate-200 text-indigo-700 hover:bg-white flex items-center gap-2 font-bold transition-all">
-            <Navigation2 className="w-5 h-5" />
-            <span className="hidden md:inline">Compartir Trayecto</span>
-          </button>
+          )}
         </div>
 
-        {/* Panel Inferior: SOS y Llegué Bien */}
         <div className="bg-white p-6 rounded-b-3xl shadow-[0_-10px_40px_rgba(0,0,0,0.1)] border-t border-slate-200 z-10 flex gap-4">
-          <button 
+          <button
+            type="button"
             className="flex-1 bg-red-600 hover:bg-red-700 text-white font-black py-4 rounded-2xl flex items-center justify-center gap-2 text-lg transition-all"
-            onClick={() => alert("¡ALERTA SOS ENVIADA A CONTACTOS Y POLICÍA!")}
+            onClick={() => window.alert("¡SOS! (demo)")}
           >
             <ShieldAlert className="w-6 h-6" /> SOS
           </button>
-          <button 
+          <button
+            type="button"
             className="flex-1 bg-emerald-500 hover:bg-emerald-600 text-white font-black py-4 rounded-2xl flex items-center justify-center gap-2 text-lg transition-all"
             onClick={() => {
-              alert("Notificación 'Llegué bien' enviada a tus contactos.");
+              window.alert("Notificación a contactos (demo).");
               setStep("buscar");
+              setRutaElegida(null);
             }}
           >
             <CheckCircle2 className="w-6 h-6" /> Llegué Bien
           </button>
-          <button 
+          <button
+            type="button"
             onClick={() => setStep("alternativas")}
             className="bg-slate-100 text-slate-600 p-4 rounded-2xl hover:bg-slate-200"
           >
@@ -102,42 +413,88 @@ export function Rutas() {
     <div className="space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500 h-full flex flex-col">
       <header>
         <h1 className="text-3xl font-black text-slate-900">
-          {step === "buscar" ? "Buscar Ruta Segura" : "Rutas Alternativas"}
+          {step === "buscar" ? "Buscar Ruta Segura" : "Rutas alternativas"}
         </h1>
         <p className="text-slate-500 mt-2 font-medium">
-          {step === "buscar" 
-            ? "Encuentra la mejor forma de ir de un punto A a un punto B evitando zonas de riesgo."
-            : "Selecciona la opción que mejor se adapte a tu necesidad."}
+          {step === "buscar"
+            ? "Escribe cualquier dirección o lugar en Lima. Calculamos 3 alternativas distintas (seguridad, tiempo y equilibrio)."
+            : "Compara y elige. El mapa muestra las tres trayectorias sugeridas."}
         </p>
       </header>
 
-      {/* Search Panel (Pantalla 6) */}
       <div className="bg-white p-6 rounded-3xl border border-slate-200 shadow-sm relative z-10">
         <form onSubmit={handleSearch} className="space-y-5">
           <div className="relative pl-8 space-y-4">
             <div className="absolute left-3.5 top-5 bottom-5 w-0.5 bg-slate-200 rounded-full"></div>
             <div className="relative">
               <div className="absolute -left-[27px] top-1/2 -translate-y-1/2 w-4 h-4 rounded-full border-4 border-indigo-600 bg-white"></div>
-              <input type="text" defaultValue="Mi ubicación actual" className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3.5 text-slate-900 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              <input
+                type="text"
+                value={origenTexto}
+                onChange={(e) => setOrigenTexto(e.target.value)}
+                aria-label="Origen"
+                className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3.5 text-slate-900 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
+            </div>
+            <div className="flex items-center gap-2 pl-1">
+              <input
+                id="gps-origen"
+                type="checkbox"
+                checked={usarGpsOrigen}
+                onChange={(e) => setUsarGpsOrigen(e.target.checked)}
+                className="rounded"
+              />
+              <label htmlFor="gps-origen" className="text-sm text-slate-600">
+                GPS solo para &quot;Mi ubicación actual&quot;; si escribes otra dirección en
+                Origen, se busca en el mapa (no se usa GPS con texto de calle).
+              </label>
             </div>
             <div className="relative">
               <div className="absolute -left-[27px] top-1/2 -translate-y-1/2 w-4 h-4 rounded-full bg-red-500 border-2 border-white shadow-sm"></div>
-              <input type="text" placeholder="¿A dónde vas? (Ej: Universidad)" required className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3.5 text-slate-900 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500" />
+              <input
+                type="text"
+                value={destinoTexto}
+                onChange={(e) => setDestinoTexto(e.target.value)}
+                placeholder="Ej: Av. Larco 123, Miraflores  /  Parque Kennedy  /  UNI"
+                aria-label="Destino"
+                required
+                className="w-full bg-slate-50 border border-slate-200 rounded-2xl px-4 py-3.5 text-slate-900 font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500"
+              />
             </div>
           </div>
+
+          {searchError && (
+            <p className="text-sm text-red-600 font-medium">{searchError}</p>
+          )}
 
           {step === "buscar" && (
             <div className="flex items-center gap-4 border-t border-slate-100 pt-5">
               <div className="flex bg-slate-100 p-1 rounded-xl flex-1 md:flex-none">
-                <button type="button" onClick={() => setMode("pedestrian")} className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg font-bold transition-all ${mode === 'pedestrian' ? 'bg-white shadow-sm text-indigo-700' : 'text-slate-500'}`}>
+                <button
+                  type="button"
+                  onClick={() => setMode("pedestrian")}
+                  className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg font-bold transition-all ${mode === "pedestrian" ? "bg-white shadow-sm text-indigo-700" : "text-slate-500"}`}
+                >
                   <Footprints className="w-5 h-5" /> Peatón
                 </button>
-                <button type="button" onClick={() => setMode("bike")} className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg font-bold transition-all ${mode === 'bike' ? 'bg-white shadow-sm text-indigo-700' : 'text-slate-500'}`}>
+                <button
+                  type="button"
+                  onClick={() => setMode("bike")}
+                  className={`flex-1 md:flex-none flex items-center justify-center gap-2 px-6 py-2.5 rounded-lg font-bold transition-all ${mode === "bike" ? "bg-white shadow-sm text-indigo-700" : "text-slate-500"}`}
+                >
                   <Bike className="w-5 h-5" /> Bicicleta
                 </button>
               </div>
-              <button type="submit" disabled={isSearching} className="ml-auto bg-indigo-600 text-white font-bold px-8 py-3.5 rounded-xl hover:bg-indigo-700 flex items-center gap-2 shadow-md">
-                {isSearching ? <Activity className="w-5 h-5 animate-spin" /> : <Search className="w-5 h-5" />}
+              <button
+                type="submit"
+                disabled={isSearching}
+                className="ml-auto bg-indigo-600 text-white font-bold px-8 py-3.5 rounded-xl hover:bg-indigo-700 flex items-center gap-2 shadow-md"
+              >
+                {isSearching ? (
+                  <Activity className="w-5 h-5 animate-spin" />
+                ) : (
+                  <Search className="w-5 h-5" />
+                )}
                 Buscar
               </button>
             </div>
@@ -145,84 +502,112 @@ export function Rutas() {
         </form>
       </div>
 
-      {/* Results Section (Pantallas 7 y 8) */}
-      {step === "alternativas" && (
+      {step === "alternativas" && origen && dest && (
         <div className="space-y-4 animate-in fade-in slide-in-from-bottom-8 duration-700">
+          {mapKey ? (
+            <RutaMapaBusqueda
+              origin={origen}
+              dest={dest}
+              paths={capasMapa}
+              height={300}
+            />
+          ) : null}
+
           <div className="flex justify-between items-center">
             <h2 className="text-xl font-black text-slate-900 flex items-center gap-2">
-              Resultados <span className="text-sm font-bold bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">3 Opciones</span>
+              Resultados{" "}
+              <span className="text-sm font-bold bg-indigo-100 text-indigo-700 px-2 py-0.5 rounded-full">
+                3 opciones
+              </span>
             </h2>
-            <button onClick={() => setStep("buscar")} className="text-sm font-bold text-slate-500 hover:text-indigo-600">Nueva búsqueda</button>
+            <button
+              type="button"
+              onClick={() => {
+                setStep("buscar");
+                setOpciones([]);
+              }}
+              className="text-sm font-bold text-slate-500 hover:text-indigo-600"
+            >
+              Nueva búsqueda
+            </button>
           </div>
-          
+
           <div className="grid md:grid-cols-3 gap-5">
-            {/* Opción 1: Más Segura */}
-            <div className="bg-white rounded-3xl border-2 border-emerald-500 shadow-[0_8px_30px_rgba(16,185,129,0.15)] p-1 overflow-hidden relative group">
-              <div className="absolute top-0 right-0 bg-emerald-500 text-white text-xs font-black px-3 py-1 rounded-bl-xl z-10">MÁS SEGURA</div>
-              <div className="p-5">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="p-2.5 bg-emerald-100 rounded-xl text-emerald-600">
-                    <ShieldCheck className="w-6 h-6" />
+            {opciones.map((op) => {
+              const borderClass =
+                op.id === "safe"
+                  ? "border-2 border-emerald-500 shadow-[0_8px_30px_rgba(16,185,129,0.12)]"
+                  : "border border-slate-200";
+              return (
+                <div
+                  key={op.id}
+                  className={`bg-white rounded-3xl ${borderClass} shadow-sm p-1 overflow-hidden relative`}
+                >
+                  <div
+                    className={`absolute top-0 right-0 ${op.tagClass} text-white text-xs font-black px-3 py-1 rounded-bl-xl z-10`}
+                  >
+                    {op.tag}
                   </div>
-                  <div>
-                    <h3 className="font-black text-slate-900 text-lg">Ruta Principal</h3>
-                    <p className="text-emerald-600 text-xs font-bold">Nivel de Seguridad: Alto</p>
+                  <div className="p-5">
+                    <div className="flex items-center gap-3 mb-4">
+                      <div
+                        className="p-2.5 rounded-xl"
+                        style={{
+                          backgroundColor: `${op.color}22`,
+                          color: op.color,
+                        }}
+                      >
+                        {op.id === "safe" ? (
+                          <ShieldCheck className="w-6 h-6" />
+                        ) : op.id === "fast" ? (
+                          <Clock className="w-6 h-6" />
+                        ) : (
+                          <Navigation className="w-6 h-6" />
+                        )}
+                      </div>
+                      <div>
+                        <h3 className="font-black text-slate-900 text-lg">
+                          {op.nombre}
+                        </h3>
+                        <p
+                          className={`text-xs font-bold ${op.nivelClass}`}
+                        >
+                          {op.nivel}
+                        </p>
+                      </div>
+                    </div>
+                    <p className="text-slate-500 text-sm font-medium mb-6 min-h-[48px]">
+                      {op.descripcion}
+                    </p>
+                    <div className="flex justify-between items-center bg-slate-50 p-3 rounded-xl mb-4">
+                      <span className="font-bold text-sm flex items-center gap-1">
+                        <Clock className="w-4 h-4" /> {op.minutos} min
+                      </span>
+                      <span className="font-bold text-sm flex items-center gap-1">
+                        <Activity className="w-4 h-4" /> {op.km.toFixed(2)} km
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => startNavigation(op)}
+                      className={
+                        op.id === "safe"
+                          ? "w-full bg-emerald-500 text-white font-bold py-3.5 rounded-xl flex justify-center gap-2"
+                          : "w-full bg-slate-900 text-white font-bold py-3.5 rounded-xl flex justify-center gap-2"
+                      }
+                    >
+                      {op.id === "safe" ? (
+                        <>
+                          Iniciar navegación <Navigation className="w-4 h-4" />
+                        </>
+                      ) : (
+                        "Iniciar con esta ruta"
+                      )}
+                    </button>
                   </div>
                 </div>
-                <p className="text-slate-500 text-sm font-medium mb-6">Evita 2 zonas oscuras y usa vías principales iluminadas.</p>
-                <div className="flex justify-between items-center bg-slate-50 p-3 rounded-xl mb-4">
-                  <span className="font-bold text-sm flex items-center gap-1"><Clock className="w-4 h-4" /> 22 min</span>
-                  <span className="font-bold text-sm flex items-center gap-1"><Activity className="w-4 h-4" /> 1.8 km</span>
-                </div>
-                <button onClick={startNavigation} className="w-full bg-emerald-500 text-white font-bold py-3.5 rounded-xl flex justify-center gap-2">
-                  Iniciar Navegación <Navigation className="w-4 h-4" />
-                </button>
-              </div>
-            </div>
-
-            {/* Opción 2: Más Rápida */}
-            <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-1">
-              <div className="absolute top-0 right-0 bg-amber-500 text-white text-xs font-black px-3 py-1 rounded-bl-xl z-10">MÁS RÁPIDA</div>
-              <div className="p-5">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="p-2.5 bg-amber-100 rounded-xl text-amber-600"><Clock className="w-6 h-6" /></div>
-                  <div>
-                    <h3 className="font-black text-slate-900 text-lg">Atajo Sur</h3>
-                    <p className="text-amber-600 text-xs font-bold">Nivel de Seguridad: Medio</p>
-                  </div>
-                </div>
-                <p className="text-slate-500 text-sm font-medium mb-6">El trayecto más corto, cruza cerca a 1 zona con reportes.</p>
-                <div className="flex justify-between items-center bg-slate-50 p-3 rounded-xl mb-4">
-                  <span className="font-bold text-sm flex items-center gap-1"><Clock className="w-4 h-4" /> 14 min</span>
-                  <span className="font-bold text-sm flex items-center gap-1"><Activity className="w-4 h-4" /> 1.2 km</span>
-                </div>
-                <button onClick={startNavigation} className="w-full bg-slate-900 text-white font-bold py-3.5 rounded-xl flex justify-center gap-2">
-                  Ver Ruta
-                </button>
-              </div>
-            </div>
-
-            {/* Opción 3: Equilibrada */}
-            <div className="bg-white rounded-3xl border border-slate-200 shadow-sm p-1">
-              <div className="absolute top-0 right-0 bg-blue-500 text-white text-xs font-black px-3 py-1 rounded-bl-xl z-10">EQUILIBRADA</div>
-              <div className="p-5">
-                <div className="flex items-center gap-3 mb-4">
-                  <div className="p-2.5 bg-blue-100 rounded-xl text-blue-600"><Navigation className="w-6 h-6" /></div>
-                  <div>
-                    <h3 className="font-black text-slate-900 text-lg">Ruta Escénica</h3>
-                    <p className="text-blue-600 text-xs font-bold">Nivel de Seguridad: Medio-Alto</p>
-                  </div>
-                </div>
-                <p className="text-slate-500 text-sm font-medium mb-6">Buen balance. Usa calles secundarias con cámaras.</p>
-                <div className="flex justify-between items-center bg-slate-50 p-3 rounded-xl mb-4">
-                  <span className="font-bold text-sm flex items-center gap-1"><Clock className="w-4 h-4" /> 18 min</span>
-                  <span className="font-bold text-sm flex items-center gap-1"><Activity className="w-4 h-4" /> 1.5 km</span>
-                </div>
-                <button onClick={startNavigation} className="w-full bg-slate-900 text-white font-bold py-3.5 rounded-xl flex justify-center gap-2">
-                  Ver Ruta
-                </button>
-              </div>
-            </div>
+              );
+            })}
           </div>
         </div>
       )}

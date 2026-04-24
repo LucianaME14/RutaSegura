@@ -1,43 +1,75 @@
-import { createBrowserRouter, Navigate } from "react-router";
-import { Layout } from "./components/Layout";
+import { createBrowserRouter } from "react-router";
+import { lazy } from "react";
 
-// Auth
-import { Auth } from "./pages/Auth";
-
-// User Pages
-import { Home } from "./pages/Home";
-import { Mapa } from "./pages/Mapa";
-import { Rutas } from "./pages/Rutas";
-import { Reportar } from "./pages/Reportar";
-import { Perfil } from "./pages/Perfil";
-
-// Admin Pages
-import { AdminDashboard } from "./pages/admin/Dashboard";
-import { AdminReportes } from "./pages/admin/Reportes";
-import { AdminUsuarios } from "./pages/admin/Usuarios";
-import { AdminAlertas } from "./pages/admin/Alertas";
-import { AdminConfiguracion } from "./pages/admin/Configuracion";
+const Root = lazy(() => import("./pages/Root"));
+const Auth = lazy(() => import("./pages/Auth"));
+const Layout = lazy(() => import("./components/Layout"));
+const Home = lazy(() => import("./pages/Home"));
+const Mapa = lazy(() => import("./pages/Mapa"));
+const Rutas = lazy(() => import("./pages/Rutas"));
+const Reportar = lazy(() => import("./pages/Reportar"));
+const Perfil = lazy(() => import("./pages/Perfil"));
+const Registro = lazy(() => import("./pages/Registro"));
+const UserDashboard = lazy(() => import("./pages/UserDashboard"));
+const UserContacts = lazy(() => import("./pages/UserContacts"));
+const UserNotifications = lazy(() => import("./pages/UserNotifications"));
+const UserRequireAuth = lazy(() => import("./components/UserRequireAuth"));
+const AdminDashboard = lazy(() => import("./pages/AdminDashboard"));
+const AdminIncidents = lazy(() => import("./pages/AdminIncidents"));
+const AdminUsers = lazy(() => import("./pages/AdminUsers"));
+const AdminSettings = lazy(() => import("./pages/AdminSettings"));
+const AdminZones = lazy(() => import("./pages/AdminZones"));
+const AdminAlertas = lazy(() => import("./pages/AdminAlertas"));
+const AdminRequireAuth = lazy(() => import("./components/AdminRequireAuth"));
+const PrivacyPolicy = lazy(() => import("./pages/PrivacyPolicy"));
+const TermsofService = lazy(() => import("./pages/TermsofService"));
+const NotFound = lazy(() => import("./pages/NotFound"));
 
 export const router = createBrowserRouter([
   {
     path: "/",
-    Component: Layout,
+    Component: Root,
     children: [
       { index: true, Component: Auth },
-      { path: "home", Component: Home },
-      { path: "mapa", Component: Mapa },
-      { path: "rutas", Component: Rutas },
-      { path: "reportar", Component: Reportar },
-      { path: "perfil", Component: Perfil },
-      
-      // Admin Routes
-      { path: "admin/dashboard", Component: AdminDashboard },
-      { path: "admin/reportes", Component: AdminReportes },
-      { path: "admin/usuarios", Component: AdminUsuarios },
-      { path: "admin/mapa-calor", Component: Mapa }, 
-      { path: "admin/alertas", Component: AdminAlertas }, 
-      { path: "admin/configuracion", Component: AdminConfiguracion }, 
-      { path: "*", Component: () => <Navigate to="/" replace /> },
+      { path: "registro", Component: Registro },
+      {
+        path: "",
+        Component: Layout,
+        children: [
+          {
+            path: "",
+            Component: UserRequireAuth,
+            children: [
+              { path: "home", Component: Home },
+              { path: "mapa", Component: Mapa },
+              { path: "rutas", Component: Rutas },
+              { path: "reportar", Component: Reportar },
+              { path: "perfil", Component: Perfil },
+              { path: "user", Component: UserDashboard },
+              { path: "user/contacts", Component: UserContacts },
+              { path: "user/notifications", Component: UserNotifications },
+            ],
+          },
+          {
+            path: "admin",
+            Component: AdminRequireAuth,
+            children: [
+              { index: true, Component: AdminDashboard },
+              { path: "dashboard", Component: AdminDashboard },
+              { path: "reportes", Component: AdminIncidents },
+              { path: "usuarios", Component: AdminUsers },
+              { path: "mapa-calor", Component: AdminZones },
+              { path: "alertas", Component: AdminAlertas },
+              { path: "configuracion", Component: AdminSettings },
+            ],
+          },
+          { path: "privacy", Component: PrivacyPolicy },
+          { path: "privacidad", Component: PrivacyPolicy },
+          { path: "terms", Component: TermsofService },
+          { path: "terminos", Component: TermsofService },
+          { path: "*", Component: NotFound },
+        ],
+      },
     ],
   },
 ]);
