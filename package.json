@@ -4,7 +4,8 @@
   "version": "0.0.1",
   "type": "module",
   "scripts": {
-    "build": "vite build",
+    "build": "vite build && npm run copy-frontend",
+    "copy-frontend": "node scripts/copy-dist.js",
     "dev": "vite",
     "lint": "npm run lint:css",
     "lint:css": "stylelint src/styles/**/*.css"

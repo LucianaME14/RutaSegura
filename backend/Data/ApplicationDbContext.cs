@@ -1,5 +1,6 @@
 using Microsoft.EntityFrameworkCore;
 using RutaSegura.Models;
+using RutaSegura.Services;
 
 namespace RutaSegura.Data
 {
@@ -94,6 +95,111 @@ namespace RutaSegura.Data
                 });
 
             modelBuilder.Entity<AlertaSistema>(e => e.ToTable("AlertasSistema"));
+        }
+
+        public async Task SeedDataAsync()
+        {
+            if (!Catalogos.Any())
+            {
+                var catalogos = new[]
+                {
+                    new Catalogo { Tipo = "TipoReporte", Codigo = "Robo", Nombre = "Robo", Descripcion = "Robo de vehículo o pertenencias", Activo = true, CreadoEn = DateTime.UtcNow },
+                    new Catalogo { Tipo = "TipoReporte", Codigo = "Asalto", Nombre = "Asalto", Descripcion = "Asalto a persona", Activo = true, CreadoEn = DateTime.UtcNow },
+                    new Catalogo { Tipo = "TipoReporte", Codigo = "Accidente", Nombre = "Accidente", Descripcion = "Accidente de tránsito", Activo = true, CreadoEn = DateTime.UtcNow },
+                    new Catalogo { Tipo = "TipoReporte", Codigo = "ZonaOscura", Nombre = "Zona Oscura", Descripcion = "Área con poca iluminación", Activo = true, CreadoEn = DateTime.UtcNow },
+                    new Catalogo { Tipo = "TipoReporte", Codigo = "Otro", Nombre = "Otro", Descripcion = "Otro tipo de reporte", Activo = true, CreadoEn = DateTime.UtcNow },
+                };
+                Catalogos.AddRange(catalogos);
+            }
+
+            if (!Proyectos.Any())
+            {
+                var proyectos = new[]
+                {
+                    new Proyecto { Nombre = "Proyecto Centro Histórico", Descripcion = "Mejorar la seguridad en el centro histórico", Estado = "Activo", FechaInicio = DateTime.UtcNow, CreadoEn = DateTime.UtcNow },
+                    new Proyecto { Nombre = "Proyecto Barranco", Descripcion = "Implementar sistema de monitoreo en Barranco", Estado = "Activo", FechaInicio = DateTime.UtcNow, CreadoEn = DateTime.UtcNow },
+                };
+                Proyectos.AddRange(proyectos);
+            }
+
+            if (!Usuarios.Any(u => u.Email == "demo@usuario.com"))
+            {
+                var usuarios = new[]
+                {
+                    new Usuario
+                    {
+                        Nombre = "Usuario Demo",
+                        Email = "demo@usuario.com",
+                        PasswordHash = PasswordService.Hash("12345678"),
+                        Telefono = "+51 999 888 777",
+                        Rol = "Usuario",
+                        Estado = "Activo",
+                        FechaRegistro = DateTime.UtcNow
+                    },
+                    new Usuario
+                    {
+                        Nombre = "Admin Demo",
+                        Email = "admin@admin.com",
+                        PasswordHash = PasswordService.Hash("admin1234"),
+                        Telefono = "+51 999 888 000",
+                        Rol = "Administrador",
+                        Estado = "Activo",
+                        FechaRegistro = DateTime.UtcNow
+                    }
+                };
+                Usuarios.AddRange(usuarios);
+            }
+            else
+            {
+                // Update passwords for existing demo users
+                var demoUser = Usuarios.FirstOrDefault(u => u.Email == "demo@usuario.com");
+                if (demoUser != null)
+                {
+                    demoUser.PasswordHash = PasswordService.Hash("12345678");
+                }
+                
+                var adminUser = Usuarios.FirstOrDefault(u => u.Email == "admin@admin.com");
+                if (adminUser != null)
+                {
+                    adminUser.PasswordHash = PasswordService.Hash("admin1234");
+                }
+            }
+
+            if (!Contactos.Any())
+            {
+                var contactos = new[]
+                {
+                    new Contacto { UsuarioId = 1, Nombre = "Policía Nacional", Telefono = "105", Parentesco = "Emergencia", Prioridad = 1, EsPrincipal = true, CreadoEn = DateTime.UtcNow },
+                    new Contacto { UsuarioId = 1, Nombre = "Bomberos", Telefono = "116", Parentesco = "Emergencia", Prioridad = 2, EsPrincipal = false, CreadoEn = DateTime.UtcNow },
+                    new Contacto { UsuarioId = 1, Nombre = "Ambulancia", Telefono = "106", Parentesco = "Emergencia", Prioridad = 3, EsPrincipal = false, CreadoEn = DateTime.UtcNow },
+                };
+                Contactos.AddRange(contactos);
+            }
+
+            if (!Reportes.Any())
+            {
+                var reportes = new[]
+                {
+                    new Reporte
+                    {
+                        UsuarioId = 1,
+                        CatalogoId = 1,
+                        ProyectoId = 1,
+                        TipoIncidente = "Robo",
+                        Ubicacion = "Plaza Mayor, Lima",
+                        Latitud = "-12.0464",
+                        Longitud = "-77.0428",
+                        Descripcion = "Robo de celular en Plaza Mayor",
+                        Estado = "Pendiente",
+                        NivelConfianzaIA = 75.0f,
+                        EsAnonimo = false,
+                        FechaReporte = DateTime.UtcNow
+                    }
+                };
+                Reportes.AddRange(reportes);
+            }
+
+            await SaveChangesAsync();
         }
     }
 }
