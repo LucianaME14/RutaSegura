@@ -1,12 +1,12 @@
 node_modules/
-dist/
+
 .vite/
-.env
+
 .env.*
 !.env.example
 *.log
 
-bin/
+
 obj/
 
 .vs/
@@ -14,7 +14,4 @@ obj/
 .DS_Store
 .fake
 
-# SQLite (local; no subir a GitHub)
-*.db
-*.db-shm
-*.db-wal
+
