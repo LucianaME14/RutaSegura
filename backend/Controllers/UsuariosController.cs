@@ -26,7 +26,7 @@ namespace RutaSegura.Controllers
         [HttpGet]
         public async Task<IActionResult> GetUsuarios()
         {
-            var cacheKey = "usuarios:todos";
+            var cacheKey = "usuarios:todos:v2";
 
             if (_redis.IsEnabled)
             {
@@ -68,7 +68,7 @@ namespace RutaSegura.Controllers
         [HttpGet("{id:int}/resumen")]
         public async Task<IActionResult> GetResumen(int id)
         {
-            var cacheKey = $"usuarios:resumen:{id}";
+            var cacheKey = $"usuarios:resumen:v2:{id}";
 
             if (_redis.IsEnabled)
             {
@@ -177,8 +177,8 @@ namespace RutaSegura.Controllers
         {
             if (!_redis.IsEnabled) return;
 
-            await _redis.RemoveAsync("usuarios:todos");
-            await _redis.RemoveAsync($"usuarios:resumen:{usuarioId}");
+            await _redis.RemoveAsync("usuarios:todos:v2");
+            await _redis.RemoveAsync($"usuarios:resumen:v2:{usuarioId}");
         }
     }
 }
