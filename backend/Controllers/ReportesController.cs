@@ -1,10 +1,12 @@
 using System.ComponentModel.DataAnnotations;
 using System.Security.Claims;
+using System.Text.Json;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using RutaSegura.Data;
 using RutaSegura.Models;
+using RutaSegura.Services;
 
 namespace RutaSegura.Controllers
 {
@@ -14,42 +16,59 @@ namespace RutaSegura.Controllers
     {
         private const int MaxEvidenciaLength = 1_200_000;
         private readonly ApplicationDbContext _context;
+        private readonly RedisService _redis;
 
-        public ReportesController(ApplicationDbContext context)
+        public ReportesController(ApplicationDbContext context, RedisService redis)
         {
             _context = context;
+            _redis = redis;
         }
 
-        // GET: api/Reportes
         [HttpGet]
         public async Task<IActionResult> GetReportes()
         {
+            var cacheKey = "reportes:todos";
+
+            if (_redis.IsEnabled)
+            {
+                var cache = await _redis.GetStringAsync(cacheKey);
+                if (cache != null)
+                    return Ok(JsonSerializer.Deserialize<object>(cache));
+            }
+
             var reportes = await _context.Reportes
                 .AsNoTracking()
                 .OrderByDescending(r => r.FechaReporte)
-                .Select(
-                    r => new
-                    {
-                        r.Id,
-                        r.TipoIncidente,
-                        r.Ubicacion,
-                        r.Descripcion,
-                        r.Estado,
-                        r.FechaReporte,
-                        r.NivelConfianzaIA,
-                        r.Latitud,
-                        r.Longitud,
-                        r.EsAnonimo,
-                        Usuario = r.Usuario == null
-                            ? null
-                            : new { r.Usuario.Nombre, r.Usuario.Email },
-                    })
+                .Select(r => new
+                {
+                    r.Id,
+                    r.TipoIncidente,
+                    r.Ubicacion,
+                    r.Descripcion,
+                    r.Estado,
+                    r.FechaReporte,
+                    r.NivelConfianzaIA,
+                    r.Latitud,
+                    r.Longitud,
+                    r.EsAnonimo,
+                    Usuario = r.Usuario == null
+                        ? null
+                        : new { r.Usuario.Nombre, r.Usuario.Email },
+                })
                 .ToListAsync();
+
+            if (_redis.IsEnabled)
+            {
+                await _redis.SetStringAsync(
+                    cacheKey,
+                    JsonSerializer.Serialize(reportes),
+                    TimeSpan.FromMinutes(5)
+                );
+            }
 
             return Ok(reportes);
         }
 
-        /// <summary>Últimos reportes para inicio (sin datos sensibles). Incluye pendientes y aprobados.</summary>
         [AllowAnonymous]
         [HttpGet("recientes")]
         public async Task<IActionResult> GetRecientes(
@@ -57,12 +76,23 @@ namespace RutaSegura.Controllers
             [FromQuery] int maxDays = 30)
         {
             var n = Math.Clamp(take, 1, 30);
-            var from = DateTime.UtcNow.AddDays(-Math.Clamp(maxDays, 1, 365));
+            var days = Math.Clamp(maxDays, 1, 365);
+            var cacheKey = $"reportes:recientes:{n}:{days}";
+
+            if (_redis.IsEnabled)
+            {
+                var cache = await _redis.GetStringAsync(cacheKey);
+                if (cache != null)
+                    return Ok(JsonSerializer.Deserialize<object>(cache));
+            }
+
+            var from = DateTime.UtcNow.AddDays(-days);
+
             var list = await _context.Reportes
                 .AsNoTracking()
                 .Where(r =>
-                    r.FechaReporte >= from
-                    && r.Estado != "Rechazado")
+                    r.FechaReporte >= from &&
+                    r.Estado != "Rechazado")
                 .OrderByDescending(r => r.FechaReporte)
                 .Take(n)
                 .Select(r => new
@@ -74,6 +104,16 @@ namespace RutaSegura.Controllers
                     r.FechaReporte,
                 })
                 .ToListAsync();
+
+            if (_redis.IsEnabled)
+            {
+                await _redis.SetStringAsync(
+                    cacheKey,
+                    JsonSerializer.Serialize(list),
+                    TimeSpan.FromMinutes(5)
+                );
+            }
+
             return Ok(list);
         }
 
@@ -82,6 +122,15 @@ namespace RutaSegura.Controllers
         public async Task<IActionResult> GetMios()
         {
             var id = int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+            var cacheKey = $"reportes:mios:{id}";
+
+            if (_redis.IsEnabled)
+            {
+                var cache = await _redis.GetStringAsync(cacheKey);
+                if (cache != null)
+                    return Ok(JsonSerializer.Deserialize<object>(cache));
+            }
+
             var reportes = await _context.Reportes
                 .Where(r => r.UsuarioId == id)
                 .OrderByDescending(r => r.FechaReporte)
@@ -96,10 +145,19 @@ namespace RutaSegura.Controllers
                     r.Descripcion,
                 })
                 .ToListAsync();
+
+            if (_redis.IsEnabled)
+            {
+                await _redis.SetStringAsync(
+                    cacheKey,
+                    JsonSerializer.Serialize(reportes),
+                    TimeSpan.FromMinutes(5)
+                );
+            }
+
             return Ok(reportes);
         }
 
-        // POST: api/Reportes/Aprobar/5
         [HttpPost("Aprobar/{id}")]
         public async Task<IActionResult> Aprobar(int id)
         {
@@ -108,6 +166,9 @@ namespace RutaSegura.Controllers
 
             reporte.Estado = "Aprobado";
             await _context.SaveChangesAsync();
+
+            await LimpiarCacheReportes(reporte.UsuarioId);
+
             return Ok(new { success = true, message = "Reporte aprobado correctamente." });
         }
 
@@ -119,6 +180,9 @@ namespace RutaSegura.Controllers
 
             reporte.Estado = "Rechazado";
             await _context.SaveChangesAsync();
+
+            await LimpiarCacheReportes(reporte.UsuarioId);
+
             return Ok(new { success = true, message = "Reporte rechazado." });
         }
 
@@ -148,8 +212,10 @@ namespace RutaSegura.Controllers
             if (!string.IsNullOrEmpty(req.UrlFotoEvidencia) &&
                 req.UrlFotoEvidencia.Length > MaxEvidenciaLength)
             {
-                return BadRequest(
-                    new { message = "La evidencia (foto, PDF o Word) es demasiado grande. Reduce el tamaño del archivo." });
+                return BadRequest(new
+                {
+                    message = "La evidencia (foto, PDF o Word) es demasiado grande. Reduce el tamaño del archivo."
+                });
             }
 
             var reporte = new Reporte
@@ -169,7 +235,25 @@ namespace RutaSegura.Controllers
 
             _context.Reportes.Add(reporte);
             await _context.SaveChangesAsync();
+
+            await LimpiarCacheReportes(userId);
+
             return Ok(new { success = true, message = "Reporte creado exitosamente.", id = reporte.Id });
+        }
+
+        private async Task LimpiarCacheReportes(int usuarioId)
+        {
+            if (!_redis.IsEnabled) return;
+
+            await _redis.RemoveAsync("reportes:todos");
+            await _redis.RemoveAsync($"reportes:mios:{usuarioId}");
+
+            for (int take = 1; take <= 30; take++)
+            {
+                await _redis.RemoveAsync($"reportes:recientes:{take}:30");
+            }
+
+            await _redis.RemoveAsync("reportes:recientes:8:30");
         }
     }
 }
