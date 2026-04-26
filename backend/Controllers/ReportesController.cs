@@ -27,7 +27,7 @@ namespace RutaSegura.Controllers
         [HttpGet]
         public async Task<IActionResult> GetReportes()
         {
-            var cacheKey = "reportes:todos";
+            var cacheKey = "reportes:todos:v2";
 
             if (_redis.IsEnabled)
             {
@@ -77,7 +77,7 @@ namespace RutaSegura.Controllers
         {
             var n = Math.Clamp(take, 1, 30);
             var days = Math.Clamp(maxDays, 1, 365);
-            var cacheKey = $"reportes:recientes:{n}:{days}";
+            var cacheKey = $"reportes:recientes:v2:{n}:{days}";
 
             if (_redis.IsEnabled)
             {
@@ -245,15 +245,15 @@ namespace RutaSegura.Controllers
         {
             if (!_redis.IsEnabled) return;
 
-            await _redis.RemoveAsync("reportes:todos");
+            await _redis.RemoveAsync("reportes:todos:v2");
             await _redis.RemoveAsync($"reportes:mios:{usuarioId}");
 
             for (int take = 1; take <= 30; take++)
             {
-                await _redis.RemoveAsync($"reportes:recientes:{take}:30");
+                await _redis.RemoveAsync($"reportes:recientes:v2:{take}:30");
             }
 
-            await _redis.RemoveAsync("reportes:recientes:8:30");
+            await _redis.RemoveAsync("reportes:recientes:v2:8:30");
         }
     }
 }
