@@ -5,29 +5,41 @@ using RutaSegura.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-
+var isDevelopment = builder.Environment.IsDevelopment();
 
 builder.Services.AddControllers();
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("LocalDev", builder =>
+    options.AddPolicy("LocalDev", corsBuilder =>
     {
-        builder
-            .WithOrigins(
-                "http://localhost:5173",
-                "http://127.0.0.1:5173",
-                "http://localhost:5174",
-                "http://127.0.0.1:5174",
-                "http://localhost:3000",
-                "http://localhost:4173",
-                "http://127.0.0.1:4173")
-            .AllowAnyHeader()
-            .AllowAnyMethod()
-            .AllowCredentials();
+        if (isDevelopment)
+        {
+            // En desarrollo: permitir localhost y variantes
+            corsBuilder
+                .WithOrigins(
+                    "http://localhost:5173",
+                    "http://127.0.0.1:5173",
+                    "http://localhost:5174",
+                    "http://127.0.0.1:5174",
+                    "http://localhost:3000",
+                    "http://localhost:4173",
+                    "http://127.0.0.1:4173")
+                .AllowAnyHeader()
+                .AllowAnyMethod()
+                .AllowCredentials();
+        }
+        else
+        {
+            // En producción (Render): permitir cualquier origen por ahora
+            // TODO: restringir a dominios específicos después
+            corsBuilder
+                .AllowAnyOrigin()
+                .AllowAnyHeader()
+                .AllowAnyMethod();
+        }
     });
 });
 
@@ -84,7 +96,19 @@ app.UseCors("LocalDev");
 app.UseAuthentication();
 app.UseAuthorization();
 
+app.UseDefaultFiles();
+app.UseStaticFiles();
+app.MapFallbackToFile("index.html");
+
 app.MapControllers();
+
+// Inicializar base de datos y seeding
+using (var scope = app.Services.CreateScope())
+{
+    var context = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    await context.Database.MigrateAsync();
+    await context.SeedDataAsync();
+}
 
 app.Run();
 
