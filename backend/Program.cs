@@ -1,7 +1,9 @@
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.AspNetCore.DataProtection;
 using RutaSegura.Data;
 using RutaSegura.Services;
+using System.IO;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -35,6 +37,19 @@ builder.Services.AddCors(options =>
 builder.Services.AddHttpClient();
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
+
+// Configure Data Protection to persist keys to persistent disk (only in production)
+if (builder.Environment.IsProduction())
+{
+    builder.Services.AddDataProtection()
+        .PersistKeysToFileSystem(new DirectoryInfo("/var/data/keys"))
+        .SetApplicationName("RutaSegura");
+}
+else
+{
+    builder.Services.AddDataProtection()
+        .SetApplicationName("RutaSegura");
+}
 
 builder.Services.AddScoped<JwtService>();
 builder.Services.AddSingleton<RedisService>();
@@ -85,6 +100,13 @@ app.UseAuthentication();
 app.UseAuthorization();
 
 app.MapControllers();
+
+// Apply database migrations on startup
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    db.Database.Migrate();
+}
 
 app.Run();
 
