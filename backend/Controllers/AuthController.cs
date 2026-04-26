@@ -63,7 +63,6 @@ namespace RutaSegura.Controllers
             return false;
         }
 
-        /// <summary>POST <c>/api/Auth/login</c> — Devuelve JWT y datos de usuario.</summary>
         [HttpPost("login")]
         public async Task<IActionResult> Login([FromBody] LoginRequest request)
         {

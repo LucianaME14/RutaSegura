@@ -1,14 +1,2 @@
 bin/
 obj/
-**/bin/
-**/obj/
-.vscode/
-.git/
-.gitignore
-Dockerfile
-*.db
-*.sqlite
-*.sqlite3
-dist/
-node_modules/
-*.log
