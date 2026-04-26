@@ -15,7 +15,7 @@ import { apiUrl } from "../lib/api";
 
 type AlertaRecienteApi = {
   id: number;
-  tipoIncidente: string;
+  tipoIncidente: string | null;
   ubicacion: string;
   descripcion: string | null;
   fechaReporte: string;
@@ -28,6 +28,15 @@ function truncar(s: string, max: number) {
 }
 
 function classAlerta(tipo: string) {
+  if (!tipo) {
+    return {
+      box: "border border-slate-200 bg-slate-50",
+      iconBg: "bg-slate-600",
+      title: "text-slate-900",
+      body: "text-slate-600",
+      time: "text-slate-500",
+    };
+  }
   const t = stripAccents(tipo.toLowerCase());
   if (t.includes("robo")) {
     return {
@@ -93,6 +102,7 @@ function stripAccents(s: string) {
 }
 
 function usarIconoEscudo(tipo: string) {
+  if (!tipo) return false;
   const t = stripAccents(tipo.toLowerCase());
   return (
     t.includes("robo") ||
@@ -118,8 +128,7 @@ export default function Home() {
   const [alertas, setAlertas] = useState<AlertaRecienteApi[]>([]);
   const [cargandoAlertas, setCargandoAlertas] = useState(true);
   const [errorAlertas, setErrorAlertas] = useState<string | null>(null);
-  const saludo =
-    user?.nombre?.trim().split(/\s+/)[0] ?? "explorador";
+  const saludo = user?.nombre?.trim().split(/\s+/)[0] ?? "explorador";
 
   const fetchAlertas = useCallback(async () => {
     setCargandoAlertas(true);
@@ -136,7 +145,9 @@ export default function Home() {
       const data: AlertaRecienteApi[] = await r.json();
       setAlertas(Array.isArray(data) ? data : []);
     } catch {
-      setErrorAlertas("Revisa la conexión; no se pudo cargar el listado de alertas.");
+      setErrorAlertas(
+        "Revisa la conexión; no se pudo cargar el listado de alertas.",
+      );
       setAlertas([]);
     } finally {
       setCargandoAlertas(false);
@@ -229,12 +240,12 @@ export default function Home() {
           ) : (
             <div className="space-y-4">
               {alertas.map((a) => {
-                const st = classAlerta(a.tipoIncidente);
-                const titulo = `${a.tipoIncidente}: ${truncar(a.ubicacion, 64)}`;
+                const st = classAlerta(a.tipoIncidente || "Otro");
+                const titulo = `${a.tipoIncidente || "Incidente"}: ${truncar(a.ubicacion, 64)}`;
                 const cuerpo = a.descripcion?.trim()
                   ? a.descripcion.trim()
                   : a.ubicacion;
-                const Icono = usarIconoEscudo(a.tipoIncidente)
+                const Icono = usarIconoEscudo(a.tipoIncidente || "")
                   ? ShieldAlert
                   : AlertTriangle;
                 return (
