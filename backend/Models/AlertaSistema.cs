@@ -1,6 +1,6 @@
 using System.ComponentModel.DataAnnotations;
-
-namespace RutaSegura.Models
+/// cambio
+namespace RutaSegura.Models 
 {
     public class AlertaSistema
     {
