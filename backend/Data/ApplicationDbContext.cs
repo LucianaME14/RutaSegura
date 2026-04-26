@@ -110,6 +110,7 @@ namespace RutaSegura.Data
                     new Catalogo { Tipo = "TipoReporte", Codigo = "Otro", Nombre = "Otro", Descripcion = "Otro tipo de reporte", Activo = true, CreadoEn = DateTime.UtcNow },
                 };
                 Catalogos.AddRange(catalogos);
+                await SaveChangesAsync();
             }
 
             if (!Proyectos.Any())
@@ -120,6 +121,7 @@ namespace RutaSegura.Data
                     new Proyecto { Nombre = "Proyecto Barranco", Descripcion = "Implementar sistema de monitoreo en Barranco", Estado = "Activo", FechaInicio = DateTime.UtcNow, CreadoEn = DateTime.UtcNow },
                 };
                 Proyectos.AddRange(proyectos);
+                await SaveChangesAsync();
             }
 
             if (!Usuarios.Any(u => u.Email == "demo@usuario.com"))
@@ -148,6 +150,7 @@ namespace RutaSegura.Data
                     }
                 };
                 Usuarios.AddRange(usuarios);
+                await SaveChangesAsync();
             }
             else
             {
@@ -165,26 +168,30 @@ namespace RutaSegura.Data
                 }
             }
 
-            if (!Contactos.Any())
+            var demoUserId = Usuarios.FirstOrDefault(u => u.Email == "demo@usuario.com")?.Id;
+            var catalogoRoboId = Catalogos.FirstOrDefault(c => c.Codigo == "Robo")?.Id;
+            var proyectoBarrancoId = Proyectos.FirstOrDefault(p => p.Nombre.Contains("Barranco"))?.Id;
+
+            if (!Contactos.Any() && demoUserId.HasValue)
             {
                 var contactos = new[]
                 {
-                    new Contacto { UsuarioId = 1, Nombre = "Policía Nacional", Telefono = "105", Parentesco = "Emergencia", Prioridad = 1, EsPrincipal = true, CreadoEn = DateTime.UtcNow },
-                    new Contacto { UsuarioId = 1, Nombre = "Bomberos", Telefono = "116", Parentesco = "Emergencia", Prioridad = 2, EsPrincipal = false, CreadoEn = DateTime.UtcNow },
-                    new Contacto { UsuarioId = 1, Nombre = "Ambulancia", Telefono = "106", Parentesco = "Emergencia", Prioridad = 3, EsPrincipal = false, CreadoEn = DateTime.UtcNow },
+                    new Contacto { UsuarioId = demoUserId.Value, Nombre = "Policía Nacional", Telefono = "105", Parentesco = "Emergencia", Prioridad = 1, EsPrincipal = true, CreadoEn = DateTime.UtcNow },
+                    new Contacto { UsuarioId = demoUserId.Value, Nombre = "Bomberos", Telefono = "116", Parentesco = "Emergencia", Prioridad = 2, EsPrincipal = false, CreadoEn = DateTime.UtcNow },
+                    new Contacto { UsuarioId = demoUserId.Value, Nombre = "Ambulancia", Telefono = "106", Parentesco = "Emergencia", Prioridad = 3, EsPrincipal = false, CreadoEn = DateTime.UtcNow },
                 };
                 Contactos.AddRange(contactos);
             }
 
-            if (!Reportes.Any())
+            if (!Reportes.Any() && demoUserId.HasValue && catalogoRoboId.HasValue && proyectoBarrancoId.HasValue)
             {
                 var reportes = new[]
                 {
                     new Reporte
                     {
-                        UsuarioId = 1,
-                        CatalogoId = 1,
-                        ProyectoId = 1,
+                        UsuarioId = demoUserId.Value,
+                        CatalogoId = catalogoRoboId.Value,
+                        ProyectoId = proyectoBarrancoId.Value,
                         TipoIncidente = "Robo",
                         Ubicacion = "Plaza Mayor, Lima",
                         Latitud = "-12.0464",
