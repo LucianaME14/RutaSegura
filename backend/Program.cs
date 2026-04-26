@@ -84,6 +84,10 @@ app.UseCors("LocalDev");
 app.UseAuthentication();
 app.UseAuthorization();
 
+app.UseDefaultFiles();
+app.UseStaticFiles();
+app.MapFallbackToFile("index.html");
+
 app.MapControllers();
 
 // Inicializar base de datos y seeding
