@@ -1,11 +1,8 @@
- fix/funcion-render
+// Modelo de alerta de sistema
+using System;
 using System.ComponentModel.DataAnnotations;
-namespace RutaSegura.Models 
-
-using System.ComponentModel.DataAnnotations; 
 
 namespace RutaSegura.Models
-main
 {
     public class AlertaSistema
     {
