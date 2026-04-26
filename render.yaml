@@ -12,7 +12,7 @@ services:
       - key: ASPNETCORE_URLS
         value: http://0.0.0.0:$PORT
       - key: ConnectionStrings__DefaultConnection
-        value: Data Source=/var/data/rutasegura.db
+        value: Data Source=/var/data/rutasegura.db;Mode=ReadWriteCreate;Cache=Shared;Default Timeout=20
       - key: Jwt__Issuer
         value: RutaSegura.API
       - key: Jwt__Audience

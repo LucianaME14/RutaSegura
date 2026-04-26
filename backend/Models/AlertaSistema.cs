@@ -1,6 +1,11 @@
+ fix/funcion-render
 using System.ComponentModel.DataAnnotations;
-/// cambio
 namespace RutaSegura.Models 
+
+using System.ComponentModel.DataAnnotations; 
+
+namespace RutaSegura.Models
+main
 {
     public class AlertaSistema
     {
