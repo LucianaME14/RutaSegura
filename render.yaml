@@ -20,16 +20,23 @@ services:
       - key: Jwt__Key
         generateValue: true
       - key: Redis__ConnectionString
-        fromService:
-          name: rutasegura-redis
-          type: redis
-          property: connectionString
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
     disks:
       - name: rutasegura-data
         mountPath: /var/data
         sizeGB: 1
 
-  - type: redis
-    name: rutasegura-redis
+  - type: web
+    name: rutasegura-frontend
+    runtime: node
     plan: free
-    maxmemoryPolicy: allkeys-lru
+    rootDir: .
+    buildCommand: npm ci && npm run build
+    startCommand: npx serve -s dist -l $PORT
+    envVars:
+      - key: VITE_GOOGLE_MAPS_API_KEY
+        sync: false
+      - key: VITE_API_URL
+        sync: false
