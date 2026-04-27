@@ -33,6 +33,6 @@ services:
     startCommand: npx serve -s dist -l $PORT
     envVars:
       - key: VITE_GOOGLE_MAPS_API_KEY
-        value: tu_google_maps_key
+        value: AIzaSyCfaPUzjLuxflaewqHltryE_cRhaiNgR1s
       - key: VITE_API_URL
         value: https://rutasegura-api.onrender.com
