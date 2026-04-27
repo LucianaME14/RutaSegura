@@ -1,10 +1,11 @@
 services:
   - type: web
     name: rutasegura-api
-    env: docker
-    dockerfilePath: Dockerfile
+    runtime: dotnet
     plan: free
     rootDir: .
+    buildCommand: dotnet publish backend/RutaSegura.csproj -c Release -o out
+    startCommand: dotnet out/RutaSegura.dll
     healthCheckPath: /swagger
     envVars:
       - key: ASPNETCORE_ENVIRONMENT
@@ -12,7 +13,7 @@ services:
       - key: ASPNETCORE_URLS
         value: http://0.0.0.0:$PORT
       - key: ConnectionStrings__DefaultConnection
-        value: Data Source=/var/data/rutasegura.db;Mode=ReadWriteCreate;Cache=Shared;Default Timeout=20
+        value: Data Source=/var/data/rutasegura.db
       - key: Jwt__Issuer
         value: RutaSegura.API
       - key: Jwt__Audience
