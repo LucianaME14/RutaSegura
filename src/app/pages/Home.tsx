@@ -37,7 +37,7 @@ function classAlerta(tipo: string) {
       time: "text-slate-500",
     };
   }
-  const t = stripAccents(tipo.toLowerCase());
+  const t = stripAccents(tipo?.toLowerCase() || "otro");
   if (t.includes("robo")) {
     return {
       box: "border border-red-100 bg-red-50",
@@ -104,7 +104,7 @@ function stripAccents(s: string) {
 
 function usarIconoEscudo(tipo: string) {
   if (!tipo || typeof tipo !== "string") return false;
-  const t = stripAccents(tipo.toLowerCase());
+  const t = stripAccents(tipo?.toLowerCase() || "otro");
   return (
     t.includes("robo") ||
     t.includes("acoso") ||
