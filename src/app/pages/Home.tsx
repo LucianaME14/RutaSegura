@@ -143,7 +143,11 @@ export default function Home() {
         return;
       }
       const data: AlertaRecienteApi[] = await r.json();
-      setAlertas(Array.isArray(data) ? data : []);
+      setAlertas(
+        Array.isArray(data)
+          ? data.filter((a) => a && a.id && a.ubicacion && a.fechaReporte)
+          : [],
+      );
     } catch {
       setErrorAlertas(
         "Revisa la conexión; no se pudo cargar el listado de alertas.",

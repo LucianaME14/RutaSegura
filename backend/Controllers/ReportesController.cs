@@ -77,7 +77,7 @@ namespace RutaSegura.Controllers
         {
             var n = Math.Clamp(take, 1, 30);
             var days = Math.Clamp(maxDays, 1, 365);
-            var cacheKey = $"reportes:recientes:v2:{n}:{days}";
+            var cacheKey = $"reportes:recientes:v3:{n}:{days}";
 
             if (_redis.IsEnabled)
             {
@@ -250,10 +250,10 @@ namespace RutaSegura.Controllers
 
             for (int take = 1; take <= 30; take++)
             {
-                await _redis.RemoveAsync($"reportes:recientes:v2:{take}:30");
+                await _redis.RemoveAsync($"reportes:recientes:v3:{take}:30");
             }
 
-            await _redis.RemoveAsync("reportes:recientes:v2:8:30");
+            await _redis.RemoveAsync("reportes:recientes:v3:8:30");
         }
     }
 }
