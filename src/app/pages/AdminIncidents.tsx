@@ -17,7 +17,6 @@ interface ReporteItem {
   fechaReporte: string;
   esAnonimo?: boolean;
   usuario: { nombre: string; email: string } | null;
-  nivelConfianzaIA: number;
   latitud?: string | null;
   longitud?: string | null;
   urlFotoEvidencia?: string | null;
@@ -186,10 +185,6 @@ export default function AdminIncidents() {
                   {detalle.latitud}, {detalle.longitud}
                 </p>
               ) : null}
-              <p>
-                <span className="font-bold text-slate-700">IA: </span>
-                {Math.round(detalle.nivelConfianzaIA * 100)}% confianza
-              </p>
               {detalle.descripcion ? (
                 <div>
                   <span className="font-bold text-slate-700">Descripción</span>
@@ -270,7 +265,7 @@ export default function AdminIncidents() {
           <span>ID Reporte</span>
           <span>Usuario / Tipo</span>
           <span>Ubicación</span>
-          <span>Análisis IA</span>
+          <span>Fecha y hora</span>
           <span>Estado</span>
           <span className="text-right">Acciones</span>
         </div>
@@ -307,14 +302,9 @@ export default function AdminIncidents() {
                   <div className="font-bold text-slate-900 line-clamp-2">
                     {reporte.ubicacion}
                   </div>
-                  <div className="text-xs text-slate-500">
-                    {new Date(reporte.fechaReporte).toLocaleString("es-PE")}
-                  </div>
                 </div>
-                <div>
-                  <span className="inline-flex rounded-full bg-indigo-100 px-3 py-1 text-xs font-bold text-indigo-700">
-                    {Math.round(reporte.nivelConfianzaIA * 100)}% Confiable
-                  </span>
+                <div className="text-sm text-slate-700">
+                  {new Date(reporte.fechaReporte).toLocaleString("es-PE")}
                 </div>
                 <div>
                   <span

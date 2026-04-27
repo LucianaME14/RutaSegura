@@ -218,6 +218,15 @@ namespace RutaSegura.Controllers
                 });
             }
 
+            var cat = await _context.Catalogos
+                .AsNoTracking()
+                .FirstOrDefaultAsync(c => c.Tipo == "incidente" && c.Codigo == req.TipoIncidente && c.Activo);
+
+            var proyectoDefault = await _context.Proyectos
+                .AsNoTracking()
+                .OrderBy(p => p.Id)
+                .FirstOrDefaultAsync();
+
             var reporte = new Reporte
             {
                 TipoIncidente = req.TipoIncidente,
@@ -230,7 +239,10 @@ namespace RutaSegura.Controllers
                 UsuarioId = userId,
                 FechaReporte = DateTime.UtcNow,
                 Estado = "Pendiente",
-                NivelConfianzaIA = 0.75f + (float)(Random.Shared.NextDouble() * 0.2),
+                CatalogoId = cat?.Id,
+                ProyectoId = proyectoDefault?.Id,
+                // Lab 2: aún no hay IA en el criterio del curso; el campo queda 0.
+                NivelConfianzaIA = 0f,
             };
 
             _context.Reportes.Add(reporte);

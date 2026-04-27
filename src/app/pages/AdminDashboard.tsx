@@ -8,14 +8,7 @@ import {
   ResponsiveContainer,
   CartesianGrid,
 } from "recharts";
-import {
-  Sparkles,
-  Users,
-  AlertTriangle,
-  MapPin,
-  Bell,
-  RefreshCw,
-} from "lucide-react";
+import { Users, AlertTriangle, MapPin, Bell, RefreshCw } from "lucide-react";
 import { apiUrl, readApiErrorMessage } from "../lib/api";
 
 type ResumenApi = {
@@ -318,13 +311,14 @@ export default function AdminDashboard() {
         <div className="rounded-[2rem] border border-slate-200 bg-slate-950 p-6 shadow-lg shadow-slate-900/5 text-white">
           <div className="mb-6 flex items-center justify-between">
             <div>
-              <h2 className="text-xl font-black">Riesgo por zona (agregado)</h2>
+              <h2 className="text-xl font-black">Zonas con más reportes</h2>
               <p className="mt-1 text-sm text-slate-300">
-                Agrupación de reportes por <strong>texto de ubicación</strong>{" "}
-                (últimos 7 días).
+                Resumen agregado por <strong>texto de ubicación</strong> (últimos
+                7 días). Indicador orientativo según frecuencia, sin modelo de
+                machine learning.
               </p>
             </div>
-            <Sparkles className="w-6 h-6 text-indigo-400" />
+            <MapPin className="w-6 h-6 text-indigo-400" />
           </div>
 
           {data.zonasRiesgo.length === 0 ? (

@@ -1,3 +1,7 @@
+using System.IdentityModel.Tokens.Jwt;
+using System.Security.Authentication;
+using System.Security.Claims;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.IdentityModel.Tokens;
 using RutaSegura.Data;
@@ -5,39 +9,48 @@ using RutaSegura.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-
-
 builder.Services.AddControllers();
-// Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen();
 
+
+var frontendUrl = builder.Configuration["FRONTEND_URL"] ?? "";
+
+var allowedOrigins = new List<string>
+{
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+    "http://localhost:5174",
+    "http://127.0.0.1:5174",
+    "http://localhost:3000",
+    "http://localhost:4173",
+    "http://127.0.0.1:4173",
+};
+
+if (!string.IsNullOrWhiteSpace(frontendUrl))
+    allowedOrigins.Add(frontendUrl);
+
 builder.Services.AddCors(options =>
 {
-    options.AddPolicy("LocalDev", builder =>
+    options.AddPolicy("AllowFrontend", policy =>
     {
-        builder
-            .WithOrigins(
-                "http://localhost:5173",
-                "http://127.0.0.1:5173",
-                "http://localhost:5174",
-                "http://127.0.0.1:5174",
-                "http://localhost:3000",
-                "http://localhost:4173",
-                "http://127.0.0.1:4173")
+        policy
+            .WithOrigins(allowedOrigins.ToArray())
             .AllowAnyHeader()
             .AllowAnyMethod()
             .AllowCredentials();
     });
 });
 
-// Add DbContext
+
 builder.Services.AddHttpClient();
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
 
+
 builder.Services.AddScoped<JwtService>();
 builder.Services.AddSingleton<RedisService>();
+
 
 var jwtKey = builder.Configuration["Jwt:Key"] ?? throw new InvalidOperationException("JWT key is missing.");
 var jwtIssuer = builder.Configuration["Jwt:Issuer"];
@@ -58,6 +71,25 @@ builder.Services
             ValidateLifetime = true,
             ClockSkew = TimeSpan.FromMinutes(1),
         };
+
+        
+        options.Events = new JwtBearerEvents
+        {
+            OnTokenValidated = async context =>
+            {
+                var jti = context.Principal?.FindFirstValue(JwtRegisteredClaimNames.Jti);
+                if (string.IsNullOrEmpty(jti))
+                    return;
+
+                var redis = context.HttpContext.RequestServices.GetRequiredService<RedisService>();
+                if (!redis.IsEnabled)
+                    return;
+
+                var ok = await redis.GetStringAsync($"sesion:{jti}");
+                if (ok is null)
+                    context.Fail(new AuthenticationException("Sesión revocada o expirada."));
+            },
+        };
     });
 
 builder.Services.AddAuthorization();
@@ -65,21 +97,16 @@ builder.Services.AddAuthorization();
 var app = builder.Build();
 
 if (app.Environment.IsDevelopment())
-{
     app.UseDeveloperExceptionPage();
-}
 
-// Configure the HTTP request pipeline.
 app.UseSwagger();
 app.UseSwaggerUI();
 
-// En desarrollo, el front llama por HTTP (proxy Vite → http://localhost:5000). HTTPS redirect rompe POST /api.
 if (!app.Environment.IsDevelopment())
-{
     app.UseHttpsRedirection();
-}
 
-app.UseCors("LocalDev");
+
+app.UseCors("AllowFrontend");
 
 app.UseAuthentication();
 app.UseAuthorization();
@@ -100,4 +127,11 @@ using (var scope = app.Services.CreateScope())
 
 app.Run();
 
-// app.UseHttpsRedirection();
+using (var scope = app.Services.CreateScope())
+{
+    var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    await db.Database.MigrateAsync();
+    await DbSeeder.SeedCatalogoYProyectoAsync(db);
+}
+
+await app.RunAsync();
