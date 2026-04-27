@@ -20,9 +20,9 @@ services:
       - key: Jwt__Key
         generateValue: true
       - key: Redis__ConnectionString
-        sync: false
+        value: redis://default:TU_PASSWORD@redis-14083.c98.us-east-1-4.ec2.cloud.redislabs.com:14083
       - key: FRONTEND_URL
-        sync: false
+        value: https://rutasegura-frontend.onrender.com
 
   - type: web
     name: rutasegura-frontend
@@ -33,6 +33,6 @@ services:
     startCommand: npx serve -s dist -l $PORT
     envVars:
       - key: VITE_GOOGLE_MAPS_API_KEY
-        sync: false
+        value: tu_google_maps_key
       - key: VITE_API_URL
-        sync: false
+        value: https://rutasegura-api.onrender.com
