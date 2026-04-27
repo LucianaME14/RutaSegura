@@ -20,7 +20,7 @@ services:
       - key: Jwt__Key
         generateValue: true
       - key: Redis__ConnectionString
-        value: redis://default:TU_PASSWORD@redis-14083.c98.us-east-1-4.ec2.cloud.redislabs.com:14083
+        value: redis://default:ES5tBWfe6Oyg08VT3E3EZDKqXX1DQ5EL@redis-14083.c98.us-east-1-4.ec2.cloud.redislabs.com:14083
       - key: FRONTEND_URL
         value: https://rutasegura-frontend.onrender.com
 
