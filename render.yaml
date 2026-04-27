@@ -13,7 +13,7 @@ services:
       - key: ASPNETCORE_URLS
         value: http://0.0.0.0:$PORT
       - key: ConnectionStrings__DefaultConnection
-        value: Data Source=/var/data/rutasegura.db
+        value: Data Source=/tmp/rutasegura.db
       - key: Jwt__Issuer
         value: RutaSegura.API
       - key: Jwt__Audience
@@ -24,10 +24,6 @@ services:
         sync: false
       - key: FRONTEND_URL
         sync: false
-    disks:
-      - name: rutasegura-data
-        mountPath: /var/data
-        sizeGB: 1
 
   - type: web
     name: rutasegura-frontend
