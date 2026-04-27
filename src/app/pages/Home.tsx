@@ -15,7 +15,7 @@ import { apiUrl } from "../lib/api";
 
 type AlertaRecienteApi = {
   id: number;
-  tipoIncidente: string | null;
+  tipoIncidente: string;
   ubicacion: string;
   descripcion: string | null;
   fechaReporte: string;
@@ -240,12 +240,14 @@ export default function Home() {
           ) : (
             <div className="space-y-4">
               {alertas.map((a) => {
-                const st = classAlerta(a.tipoIncidente || "Otro");
-                const titulo = `${a.tipoIncidente || "Incidente"}: ${truncar(a.ubicacion, 64)}`;
+                const tipo = a.tipoIncidente || "Otro";
+                const ubicacion = a.ubicacion || "Ubicación desconocida";
+                const st = classAlerta(tipo);
+                const titulo = `${tipo}: ${truncar(ubicacion, 64)}`;
                 const cuerpo = a.descripcion?.trim()
                   ? a.descripcion.trim()
-                  : a.ubicacion;
-                const Icono = usarIconoEscudo(a.tipoIncidente || "")
+                  : ubicacion;
+                const Icono = usarIconoEscudo(tipo)
                   ? ShieldAlert
                   : AlertTriangle;
                 return (

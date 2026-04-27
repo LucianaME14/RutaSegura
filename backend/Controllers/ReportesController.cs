@@ -98,8 +98,8 @@ namespace RutaSegura.Controllers
                 .Select(r => new
                 {
                     r.Id,
-                    r.TipoIncidente,
-                    r.Ubicacion,
+                    TipoIncidente = r.TipoIncidente ?? "Otro",
+                    Ubicacion = r.Ubicacion ?? "Ubicación desconocida",
                     r.Descripcion,
                     r.FechaReporte,
                 })
