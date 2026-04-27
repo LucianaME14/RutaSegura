@@ -246,7 +246,9 @@ export default function Home() {
             <div className="space-y-4">
               {alertas.map((a) => {
                 const tipo = String(a.tipoIncidente || "Otro");
-                const ubicacion = String(a.ubicacion || "Ubicación desconocida");
+                const ubicacion = String(
+                  a.ubicacion || "Ubicación desconocida",
+                );
                 const st = classAlerta(tipo);
                 const titulo = `${tipo}: ${truncar(ubicacion, 64)}`;
                 const cuerpo = a.descripcion?.trim()
