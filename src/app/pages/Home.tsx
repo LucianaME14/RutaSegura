@@ -28,7 +28,7 @@ function truncar(s: string, max: number) {
 }
 
 function classAlerta(tipo: string) {
-  if (!tipo) {
+  if (!tipo || typeof tipo !== "string") {
     return {
       box: "border border-slate-200 bg-slate-50",
       iconBg: "bg-slate-600",
@@ -98,11 +98,12 @@ function classAlerta(tipo: string) {
 }
 
 function stripAccents(s: string) {
+  if (!s || typeof s !== "string") return "";
   return s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
 }
 
 function usarIconoEscudo(tipo: string) {
-  if (!tipo) return false;
+  if (!tipo || typeof tipo !== "string") return false;
   const t = stripAccents(tipo.toLowerCase());
   return (
     t.includes("robo") ||
@@ -240,8 +241,8 @@ export default function Home() {
           ) : (
             <div className="space-y-4">
               {alertas.map((a) => {
-                const tipo = a.tipoIncidente || "Otro";
-                const ubicacion = a.ubicacion || "Ubicación desconocida";
+                const tipo = String(a.tipoIncidente || "Otro");
+                const ubicacion = String(a.ubicacion || "Ubicación desconocida");
                 const st = classAlerta(tipo);
                 const titulo = `${tipo}: ${truncar(ubicacion, 64)}`;
                 const cuerpo = a.descripcion?.trim()
