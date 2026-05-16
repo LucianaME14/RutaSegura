@@ -20,7 +20,7 @@ services:
       - key: Jwt__Key
         generateValue: true
       - key: Redis__ConnectionString
-        fromVariable: REDIS_CONNECTION_STRING
+        value: <REPLACE_WITH_REDIS_CONNECTION_STRING>
       - key: FRONTEND_URL
         value: https://rutasegura-frontend.onrender.com
 
@@ -33,6 +33,6 @@ services:
     startCommand: npx serve -s dist -l $PORT
     envVars:
       - key: VITE_GOOGLE_MAPS_API_KEY
-        fromVariable: GOOGLE_MAPS_API_KEY
+        value: <REPLACE_WITH_GOOGLE_MAPS_API_KEY>
       - key: VITE_API_URL
         value: https://rutasegura-api.onrender.com
