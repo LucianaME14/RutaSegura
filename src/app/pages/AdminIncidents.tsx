@@ -1,11 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import {
-  CheckCircle2,
-  XCircle,
-  Filter,
-  MoreHorizontal,
-  X,
-} from "lucide-react";
+import { CheckCircle2, XCircle, Filter, MoreHorizontal, X } from "lucide-react";
 import { apiUrl } from "../lib/api";
 
 interface ReporteItem {
@@ -63,7 +57,7 @@ export default function AdminIncidents() {
   const handleApprove = async (id: number) => {
     setActionLoading(id);
     setMenuReporteId(null);
-    const response = await fetch(`/api/Reportes/Aprobar/${id}`, {
+    const response = await fetch(apiUrl(`/api/Reportes/Aprobar/${id}`), {
       method: "POST",
     });
     if (response.ok) {
@@ -181,7 +175,9 @@ export default function AdminIncidents() {
               </p>
               {(detalle.latitud && detalle.longitud) || detalle.latitud ? (
                 <p className="text-slate-600">
-                  <span className="font-bold text-slate-700">Coordenadas: </span>
+                  <span className="font-bold text-slate-700">
+                    Coordenadas:{" "}
+                  </span>
                   {detalle.latitud}, {detalle.longitud}
                 </p>
               ) : null}
@@ -246,8 +242,8 @@ export default function AdminIncidents() {
             Gestión de Reportes
           </h1>
           <p className="mt-2 text-slate-500">
-            Aprobar, rechazar o abrir ficha. Los cambios se guardan en la base de
-            datos.
+            Aprobar, rechazar o abrir ficha. Los cambios se guardan en la base
+            de datos.
           </p>
         </div>
         <button
@@ -261,11 +257,10 @@ export default function AdminIncidents() {
       </div>
 
       <div className="overflow-hidden rounded-[2rem] border border-slate-200 bg-white shadow-sm">
-        <div className="grid grid-cols-[1.5fr_1fr_1fr_1fr_0.9fr_0.8fr] gap-4 p-5 text-sm font-bold uppercase tracking-[0.12em] text-slate-500 border-b border-slate-200">
+        <div className="grid grid-cols-[1.5fr_1fr_1.5fr_0.9fr_0.8fr] gap-4 p-5 text-sm font-bold uppercase tracking-[0.12em] text-slate-500 border-b border-slate-200">
           <span>ID Reporte</span>
           <span>Usuario / Tipo</span>
           <span>Ubicación</span>
-          <span>Fecha y hora</span>
           <span>Estado</span>
           <span className="text-right">Acciones</span>
         </div>
@@ -282,7 +277,7 @@ export default function AdminIncidents() {
             reportes.map((reporte) => (
               <div
                 key={reporte.id}
-                className="grid grid-cols-[1.5fr_1fr_1fr_1fr_0.9fr_0.8fr] gap-4 rounded-3xl border border-slate-200 bg-slate-50 p-4 items-center"
+                className="grid grid-cols-[1.5fr_1fr_1.5fr_0.9fr_0.8fr] gap-4 rounded-3xl border border-slate-200 bg-slate-50 p-4 items-center"
               >
                 <div className="font-bold text-slate-900">
                   REP-{String(reporte.id).padStart(3, "0")}
@@ -302,9 +297,9 @@ export default function AdminIncidents() {
                   <div className="font-bold text-slate-900 line-clamp-2">
                     {reporte.ubicacion}
                   </div>
-                </div>
-                <div className="text-sm text-slate-700">
-                  {new Date(reporte.fechaReporte).toLocaleString("es-PE")}
+                  <div className="text-xs text-slate-500">
+                    {new Date(reporte.fechaReporte).toLocaleString("es-PE")}
+                  </div>
                 </div>
                 <div>
                   <span
@@ -325,7 +320,8 @@ export default function AdminIncidents() {
                     title="Aprobar"
                     onClick={() => void handleApprove(reporte.id)}
                     disabled={
-                      actionLoading === reporte.id || reporte.estado === "Aprobado"
+                      actionLoading === reporte.id ||
+                      reporte.estado === "Aprobado"
                     }
                     className="inline-flex items-center justify-center rounded-2xl bg-emerald-600 px-3 py-2 text-white text-xs font-bold transition hover:bg-emerald-700 disabled:cursor-not-allowed disabled:opacity-50"
                   >
@@ -343,7 +339,10 @@ export default function AdminIncidents() {
                   >
                     <XCircle className="w-4 h-4" />
                   </button>
-                  <div className="relative" ref={menuReporteId === reporte.id ? menuRef : undefined}>
+                  <div
+                    className="relative"
+                    ref={menuReporteId === reporte.id ? menuRef : undefined}
+                  >
                     <button
                       type="button"
                       title="Más acciones"
