@@ -15,6 +15,7 @@ builder.Services.AddSwaggerGen();
 
 
 var frontendUrl = builder.Configuration["FRONTEND_URL"] ?? "";
+var isRender = builder.Configuration["RENDER"] == "true";
 
 var allowedOrigins = new List<string>
 {
@@ -102,9 +103,8 @@ if (app.Environment.IsDevelopment())
 app.UseSwagger();
 app.UseSwaggerUI();
 
-if (!app.Environment.IsDevelopment())
+if (!app.Environment.IsDevelopment() && !isRender)
     app.UseHttpsRedirection();
-
 
 app.UseCors("AllowFrontend");
 
