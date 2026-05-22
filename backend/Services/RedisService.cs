@@ -38,7 +38,7 @@ public class RedisService
             options.SyncTimeout = isLocal ? 2500 : 8000;
             options.AsyncTimeout = isLocal ? 2500 : 8000;
             options.ConnectRetry = isLocal ? 0 : 3;
-            options.Ssl = options.Ssl || LooksLikeTlsEndpoint(options);
+            // SSL solo si la cadena trae ssl=True o rediss:// (Redis Cloud :14083 suele ser sin TLS).
 
             var redis = ConnectionMultiplexer.Connect(options);
             var db = redis.GetDatabase();
@@ -111,8 +111,7 @@ public class RedisService
                 var isRender = host.StartsWith("red-", StringComparison.OrdinalIgnoreCase)
                     || host.Contains("render.com", StringComparison.OrdinalIgnoreCase);
                 var isCloud = host.Contains("redislabs.com", StringComparison.OrdinalIgnoreCase)
-                    || host.Contains("redis-cloud.com", StringComparison.OrdinalIgnoreCase)
-                    || isTls;
+                    || host.Contains("redis-cloud.com", StringComparison.OrdinalIgnoreCase);
 
                 var parts = new List<string> { $"{host}:{port}" };
                 if (!string.IsNullOrEmpty(password))
@@ -121,7 +120,7 @@ public class RedisService
                         parts.Add("user=default");
                     parts.Add($"password={password}");
                 }
-                if (isCloud || isTls)
+                if (isTls || UseTlsFromConfig(configuration))
                     parts.Add("ssl=True");
                 if (!IsLocalHost(host))
                     parts.Add("abortConnect=false");
@@ -175,8 +174,6 @@ public class RedisService
 
         if (uri.Scheme.Equals("rediss", StringComparison.OrdinalIgnoreCase))
             parts.Add("ssl=True");
-        else if (isCloudHost)
-            parts.Add("ssl=True");
 
         if (!IsLocalHost(host))
             parts.Add("abortConnect=false");
@@ -206,17 +203,9 @@ public class RedisService
         return false;
     }
 
-    private static bool LooksLikeTlsEndpoint(ConfigurationOptions options)
-    {
-        foreach (var ep in options.EndPoints)
-        {
-            var s = ep.ToString() ?? "";
-            if (s.Contains("redislabs.com", StringComparison.OrdinalIgnoreCase)
-                || s.Contains("render.com", StringComparison.OrdinalIgnoreCase))
-                return true;
-        }
-        return false;
-    }
+    private static bool UseTlsFromConfig(IConfiguration configuration) =>
+        string.Equals(configuration["Redis:Ssl"], "true", StringComparison.OrdinalIgnoreCase)
+        || string.Equals(configuration["Redis:UseSsl"], "true", StringComparison.OrdinalIgnoreCase);
 
     private void DisableAfterFailure(Exception ex, string operation, string key)
     {
