@@ -234,6 +234,24 @@ export default function AdminZones() {
     return set;
   }, [puntos]);
 
+  const conteoPorEstado = useMemo(() => {
+    const counts: Record<"Pendiente" | "Aprobado" | "Rechazado", number> = {
+      Pendiente: 0,
+      Aprobado: 0,
+      Rechazado: 0,
+    };
+    for (const p of puntos) {
+      const n = normalizarEstado(p.estado);
+      if (n !== "otro") counts[n] += 1;
+    }
+    return counts;
+  }, [puntos]);
+
+  const estadosAlternativos = useMemo(
+    () => [...estadosEnDatos].filter((e) => e !== filtroEstado),
+    [estadosEnDatos, filtroEstado],
+  );
+
   return (
     <div className="space-y-5 animate-in fade-in duration-500 pb-10">
       <AdminPageHeader
@@ -264,6 +282,9 @@ export default function AdminZones() {
                 <span className={`h-2.5 w-2.5 rounded-full ${e.dot}`} aria-hidden />
               ) : null}
               {e.label}
+              {e.id !== "todos" && conteoPorEstado[e.id] > 0 ? (
+                <span className="tabular-nums opacity-80">({conteoPorEstado[e.id]})</span>
+              ) : null}
             </button>
           ))}
         </div>
@@ -395,28 +416,51 @@ export default function AdminZones() {
                 )}
                 {filtroEstado !== "todos" && puntos.some((p) => !coincideEstado(p, filtroEstado)) ? (
                   <p className="text-xs text-indigo-700 font-medium">
-                    El filtro «{filtroEstado}» no coincide con el estado real del reporte en la lista.
-                    Usa <strong>Ver Aprobado</strong> / <strong>Ver todos</strong> o los botones de estado
-                    arriba del mapa.
+                    {estadosEnDatos.has(filtroEstado) ? (
+                      <>
+                        Hay reportes «{filtroEstado}», pero el filtro de texto u otro criterio los oculta.
+                        Prueba <strong>Ver todos</strong> o limpia el cuadro de búsqueda.
+                      </>
+                    ) : (
+                      <>
+                        No hay ningún reporte con estado «{filtroEstado}».
+                        {estadosAlternativos.length > 0 ? (
+                          <>
+                            {" "}
+                            Los que hay con GPS están en:{" "}
+                            <strong>{estadosAlternativos.join(", ")}</strong>.
+                          </>
+                        ) : null}
+                      </>
+                    )}
                   </p>
                 ) : null}
                 <div className="flex flex-wrap justify-center gap-2">
-                  {estadosEnDatos.has("Aprobado") ? (
+                  {estadosAlternativos.includes("Aprobado") ? (
                     <button
                       type="button"
                       onClick={() => aplicarFiltroEstado("Aprobado")}
                       className="rounded-xl bg-emerald-600 px-4 py-2 text-sm font-bold text-white hover:bg-emerald-700"
                     >
-                      Ver Aprobado
+                      Ver Aprobado ({conteoPorEstado.Aprobado})
                     </button>
                   ) : null}
-                  {estadosEnDatos.has("Pendiente") ? (
+                  {estadosAlternativos.includes("Pendiente") ? (
                     <button
                       type="button"
                       onClick={() => aplicarFiltroEstado("Pendiente")}
                       className="rounded-xl bg-amber-500 px-4 py-2 text-sm font-bold text-white hover:bg-amber-600"
                     >
-                      Ver Pendiente
+                      Ver Pendiente ({conteoPorEstado.Pendiente})
+                    </button>
+                  ) : null}
+                  {estadosAlternativos.includes("Rechazado") ? (
+                    <button
+                      type="button"
+                      onClick={() => aplicarFiltroEstado("Rechazado")}
+                      className="rounded-xl bg-rose-600 px-4 py-2 text-sm font-bold text-white hover:bg-rose-700"
+                    >
+                      Ver Rechazado ({conteoPorEstado.Rechazado})
                     </button>
                   ) : null}
                   <button

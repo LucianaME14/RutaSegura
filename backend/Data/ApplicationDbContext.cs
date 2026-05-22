@@ -183,7 +183,9 @@ namespace RutaSegura.Data
 
             var demoUserId = Usuarios.FirstOrDefault(u => u.Email == "demo@usuario.com")?.Id;
             var catalogoRoboId = Catalogos.FirstOrDefault(c => c.Codigo == "Robo")?.Id;
+            var catalogoAsaltoId = Catalogos.FirstOrDefault(c => c.Codigo == "Asalto")?.Id;
             var proyectoBarrancoId = Proyectos.FirstOrDefault(p => p.Nombre.Contains("Barranco"))?.Id;
+            var proyectoCentroId = Proyectos.FirstOrDefault(p => p.Nombre.Contains("Centro"))?.Id;
 
             if (!Contactos.Any() && demoUserId.HasValue)
             {
@@ -196,7 +198,12 @@ namespace RutaSegura.Data
                 Contactos.AddRange(contactos);
             }
 
-            if (!Reportes.Any() && demoUserId.HasValue && catalogoRoboId.HasValue && proyectoBarrancoId.HasValue)
+            if (!Reportes.Any()
+                && demoUserId.HasValue
+                && catalogoRoboId.HasValue
+                && catalogoAsaltoId.HasValue
+                && proyectoBarrancoId.HasValue
+                && proyectoCentroId.HasValue)
             {
                 var reportes = new[]
                 {
@@ -214,6 +221,21 @@ namespace RutaSegura.Data
                         NivelConfianzaIA = 75.0f,
                         EsAnonimo = false,
                         FechaReporte = DateTime.UtcNow
+                    },
+                    new Reporte
+                    {
+                        UsuarioId = demoUserId.Value,
+                        CatalogoId = catalogoAsaltoId.Value,
+                        ProyectoId = proyectoCentroId.Value,
+                        TipoIncidente = "Asalto",
+                        Ubicacion = "La Molina, Lima",
+                        Latitud = "-12.0771",
+                        Longitud = "-76.9422",
+                        Descripcion = "Asalto reportado en zona residencial",
+                        Estado = "Aprobado",
+                        NivelConfianzaIA = 88.0f,
+                        EsAnonimo = false,
+                        FechaReporte = DateTime.UtcNow.AddDays(-2)
                     }
                 };
                 Reportes.AddRange(reportes);
