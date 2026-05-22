@@ -58,7 +58,7 @@ public class AdminController : ControllerBase
 
         var dto = new RedisEstadoDto(
             _redis.IsEnabled,
-            _redis.IsEnabled ? "Redis operativo (caché y sesiones)" : "Redis inactivo — solo SQLite",
+            _redis.GetStatusMessage(),
             _redis.IsEnabled ? await ContarClavesAdminAsync() : 0,
             false);
 
@@ -742,9 +742,8 @@ public class AdminController : ControllerBase
                     redis = new
                     {
                         habilitado = _redis.IsEnabled,
-                        message = _redis.IsEnabled
-                            ? "Redis activo (caché y sesiones)"
-                            : "Redis no configurado — sesiones solo en base de datos",
+                        configurado = _redis.IsConfigured,
+                        message = _redis.GetStatusMessage(),
                         clavesAdmin = _redis.IsEnabled ? await ContarClavesAdminAsync() : 0,
                     },
                 });
