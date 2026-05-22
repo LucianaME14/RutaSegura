@@ -110,11 +110,17 @@ public class RedisService
                 var isTls = port is 6380 or 18100;
                 var isRender = host.StartsWith("red-", StringComparison.OrdinalIgnoreCase)
                     || host.Contains("render.com", StringComparison.OrdinalIgnoreCase);
-                var isCloud = host.Contains("redislabs.com", StringComparison.OrdinalIgnoreCase) || isTls;
+                var isCloud = host.Contains("redislabs.com", StringComparison.OrdinalIgnoreCase)
+                    || host.Contains("redis-cloud.com", StringComparison.OrdinalIgnoreCase)
+                    || isTls;
 
                 var parts = new List<string> { $"{host}:{port}" };
                 if (!string.IsNullOrEmpty(password))
+                {
+                    if (isCloud)
+                        parts.Add("user=default");
                     parts.Add($"password={password}");
+                }
                 if (isCloud || isTls)
                     parts.Add("ssl=True");
                 if (!IsLocalHost(host))
@@ -157,10 +163,19 @@ public class RedisService
         if (string.IsNullOrEmpty(password) && !string.IsNullOrEmpty(extraPassword))
             password = extraPassword;
 
+        var isCloudHost = host.Contains("redislabs.com", StringComparison.OrdinalIgnoreCase)
+            || host.Contains("redis-cloud.com", StringComparison.OrdinalIgnoreCase);
+
         if (!string.IsNullOrEmpty(password))
+        {
+            if (isCloudHost && (string.IsNullOrEmpty(uri.UserInfo) || uri.UserInfo.StartsWith("default:", StringComparison.OrdinalIgnoreCase)))
+                parts.Add("user=default");
             parts.Add($"password={password}");
+        }
 
         if (uri.Scheme.Equals("rediss", StringComparison.OrdinalIgnoreCase))
+            parts.Add("ssl=True");
+        else if (isCloudHost)
             parts.Add("ssl=True");
 
         if (!IsLocalHost(host))
