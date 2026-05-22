@@ -12,13 +12,32 @@ namespace RutaSegura.Controllers
     public class ContactosController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
+        private readonly ILogger<ContactosController> _logger;
 
-        public ContactosController(ApplicationDbContext context)
+        public ContactosController(ApplicationDbContext context, ILogger<ContactosController> logger)
         {
             _context = context;
+            _logger = logger;
         }
 
-        private int GetUserId() => int.Parse(User.FindFirstValue(ClaimTypes.NameIdentifier)!);
+        private bool TryGetUserId(out int userId)
+        {
+            userId = 0;
+            var claim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            return !string.IsNullOrEmpty(claim) && int.TryParse(claim, out userId);
+        }
+
+        private async Task<IActionResult?> RechazarSiUsuarioNoExiste(int userId)
+        {
+            if (await _context.Usuarios.AsNoTracking().AnyAsync(u => u.Id == userId))
+                return null;
+
+            return Unauthorized(new
+            {
+                message =
+                    "Tu usuario ya no existe en el servidor (p. ej. tras un reinicio). Cierra sesión e inicia de nuevo.",
+            });
+        }
 
         [HttpGet("usuario/{usuarioId:int}")]
         public async Task<IActionResult> GetByUsuario(int usuarioId)
@@ -36,7 +55,8 @@ namespace RutaSegura.Controllers
         [HttpGet("mios")]
         public async Task<IActionResult> GetMios()
         {
-            var id = GetUserId();
+            if (!TryGetUserId(out var id))
+                return Unauthorized(new { message = "Sesión inválida. Inicia sesión de nuevo." });
             var contactos = await _context.Contactos
                 .Where(c => c.UsuarioId == id)
                 .OrderBy(c => c.Prioridad)
@@ -66,20 +86,41 @@ namespace RutaSegura.Controllers
         [HttpPost("mios")]
         public async Task<IActionResult> CrearMio([FromBody] ContactoSolicitud body)
         {
+            if (!TryGetUserId(out var userId))
+                return Unauthorized(new { message = "Sesión inválida. Inicia sesión de nuevo." });
+
+            var rechazo = await RechazarSiUsuarioNoExiste(userId);
+            if (rechazo is not null) return rechazo;
+
+            if (string.IsNullOrWhiteSpace(body.Nombre) || string.IsNullOrWhiteSpace(body.Telefono))
+            {
+                return BadRequest(new { message = "Nombre y teléfono son obligatorios." });
+            }
+
             var c = new Contacto
             {
-                UsuarioId = GetUserId(),
-                Nombre = body.Nombre,
-                Telefono = body.Telefono,
-                Email = body.Email,
-                Parentesco = body.Parentesco,
-                Prioridad = body.Prioridad,
+                UsuarioId = userId,
+                Nombre = body.Nombre.Trim(),
+                Telefono = body.Telefono.Trim(),
+                Email = string.IsNullOrWhiteSpace(body.Email) ? null : body.Email.Trim(),
+                Parentesco = string.IsNullOrWhiteSpace(body.Parentesco) ? null : body.Parentesco.Trim(),
+                Prioridad = body.Prioridad < 1 ? 1 : body.Prioridad,
                 EsPrincipal = body.EsPrincipal,
                 CreadoEn = DateTime.UtcNow,
             };
-            _context.Contactos.Add(c);
-            await _context.SaveChangesAsync();
-            return CreatedAtAction(nameof(GetMios), c);
+
+            try
+            {
+                _context.Contactos.Add(c);
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateException ex)
+            {
+                _logger.LogError(ex, "No se pudo crear contacto para usuario {UserId}", userId);
+                return StatusCode(500, new { message = "No se pudo guardar el contacto. Inicia sesión de nuevo." });
+            }
+
+            return StatusCode(StatusCodes.Status201Created, c);
         }
 
         [HttpPut("{id:int}")]
@@ -106,7 +147,8 @@ namespace RutaSegura.Controllers
         [HttpPut("mios/{id:int}")]
         public async Task<IActionResult> ActualizarMio(int id, [FromBody] ContactoSolicitud body)
         {
-            var userId = GetUserId();
+            if (!TryGetUserId(out var userId))
+                return Unauthorized(new { message = "Sesión inválida. Inicia sesión de nuevo." });
             var contacto = await _context.Contactos.FirstOrDefaultAsync(c => c.Id == id && c.UsuarioId == userId);
             if (contacto is null) return NotFound();
             contacto.Nombre = body.Nombre;
@@ -137,7 +179,8 @@ namespace RutaSegura.Controllers
         [HttpDelete("mios/{id:int}")]
         public async Task<IActionResult> EliminarMio(int id)
         {
-            var userId = GetUserId();
+            if (!TryGetUserId(out var userId))
+                return Unauthorized(new { message = "Sesión inválida. Inicia sesión de nuevo." });
             var contacto = await _context.Contactos.FirstOrDefaultAsync(c => c.Id == id && c.UsuarioId == userId);
             if (contacto is null) return NotFound();
             _context.Contactos.Remove(contacto);

@@ -20,7 +20,7 @@ import {
 } from "../lib/preferenciasUsuario";
 import { useNavigate } from "react-router";
 import { useAuth } from "../contexts/AuthContext";
-import { apiUrl, authJsonHeaders } from "../lib/api";
+import { apiUrl, authJsonHeaders, readApiErrorMessage } from "../lib/api";
 
 type ContactoApi = {
   id: number;
@@ -286,9 +286,17 @@ export default function Perfil() {
           EsPrincipal: ncPrincipal,
         }),
       });
+      if (r.status === 401) {
+        logout();
+        navigate("/", { replace: true });
+        throw new Error(
+          "Tu sesión ya no es válida en el servidor. Inicia sesión de nuevo.",
+        );
+      }
       if (!r.ok) {
-        const b = await r.json().catch(() => null);
-        throw new Error(b?.message ?? "No se pudo guardar el contacto.");
+        throw new Error(
+          await readApiErrorMessage(r, "No se pudo guardar el contacto."),
+        );
       }
       setShowAddContact(false);
       setNcNombre("");
@@ -308,7 +316,7 @@ export default function Perfil() {
   const handleDeleteContact = async (id: number) => {
     if (!token) return;
     if (!window.confirm("¿Eliminar este contacto?")) return;
-    const r = await fetch(`/api/Contactos/mios/${id}`, {
+    const r = await fetch(apiUrl(`/api/Contactos/mios/${id}`), {
       method: "DELETE",
       headers: authJsonHeaders(token),
     });
@@ -337,9 +345,17 @@ export default function Perfil() {
           Orden: orden,
         }),
       });
+      if (r.status === 401) {
+        logout();
+        navigate("/", { replace: true });
+        throw new Error(
+          "Tu sesión ya no es válida en el servidor. Inicia sesión de nuevo.",
+        );
+      }
       if (!r.ok) {
-        const b = await r.json().catch(() => null);
-        throw new Error(b?.message ?? "No se pudo guardar la ubicación.");
+        throw new Error(
+          await readApiErrorMessage(r, "No se pudo guardar la ubicación."),
+        );
       }
       setShowAddUbi(false);
       setNuEtiqueta("");
@@ -370,7 +386,7 @@ export default function Perfil() {
   const handleDeleteUbi = async (id: number) => {
     if (!token) return;
     if (!window.confirm("¿Eliminar esta ubicación?")) return;
-    const r = await fetch(`/api/Ubicaciones/mias/${id}`, {
+    const r = await fetch(apiUrl(`/api/Ubicaciones/mias/${id}`), {
       method: "DELETE",
       headers: authJsonHeaders(token),
     });

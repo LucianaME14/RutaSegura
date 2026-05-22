@@ -13,22 +13,38 @@ namespace RutaSegura.Controllers
     public class UbicacionesController : ControllerBase
     {
         private readonly ApplicationDbContext _context;
+        private readonly ILogger<UbicacionesController> _logger;
 
-        public UbicacionesController(ApplicationDbContext context)
+        public UbicacionesController(ApplicationDbContext context, ILogger<UbicacionesController> logger)
         {
             _context = context;
+            _logger = logger;
         }
 
-        private int GetUserId()
+        private bool TryGetUserId(out int userId)
         {
-            var s = User.FindFirstValue(ClaimTypes.NameIdentifier);
-            return int.Parse(s!);
+            userId = 0;
+            var claim = User.FindFirstValue(ClaimTypes.NameIdentifier);
+            return !string.IsNullOrEmpty(claim) && int.TryParse(claim, out userId);
+        }
+
+        private async Task<IActionResult?> RechazarSiUsuarioNoExiste(int userId)
+        {
+            if (await _context.Usuarios.AsNoTracking().AnyAsync(u => u.Id == userId))
+                return null;
+
+            return Unauthorized(new
+            {
+                message =
+                    "Tu usuario ya no existe en el servidor (p. ej. tras un reinicio). Cierra sesión e inicia de nuevo.",
+            });
         }
 
         [HttpGet("mias")]
         public async Task<IActionResult> GetMias()
         {
-            var id = GetUserId();
+            if (!TryGetUserId(out var id))
+                return Unauthorized(new { message = "Sesión inválida. Inicia sesión de nuevo." });
             var list = await _context.UbicacionesGuardadas
                 .Where(u => u.UsuarioId == id)
                 .OrderBy(u => u.Orden)
@@ -38,29 +54,68 @@ namespace RutaSegura.Controllers
         }
 
         [HttpPost("mias")]
-        public async Task<IActionResult> Crear([FromBody] UbicacionGuardada body)
+        public async Task<IActionResult> Crear([FromBody] UbicacionSolicitud body)
         {
-            body.Id = 0;
-            body.UsuarioId = GetUserId();
-            body.CreadoEn = DateTime.UtcNow;
-            _context.UbicacionesGuardadas.Add(body);
-            await _context.SaveChangesAsync();
-            return CreatedAtAction(nameof(GetMias), body);
+            if (!TryGetUserId(out var userId))
+                return Unauthorized(new { message = "Sesión inválida. Inicia sesión de nuevo." });
+
+            var rechazo = await RechazarSiUsuarioNoExiste(userId);
+            if (rechazo is not null) return rechazo;
+
+            if (string.IsNullOrWhiteSpace(body.Etiqueta) || string.IsNullOrWhiteSpace(body.Direccion))
+            {
+                return BadRequest(new { message = "Nombre y dirección son obligatorios." });
+            }
+
+            var icono = body.Icono?.Trim();
+            if (!string.IsNullOrEmpty(icono) && icono.Length > 20)
+                icono = icono[..20];
+
+            var item = new UbicacionGuardada
+            {
+                UsuarioId = userId,
+                Etiqueta = body.Etiqueta.Trim(),
+                Direccion = body.Direccion.Trim(),
+                Latitud = body.Latitud,
+                Longitud = body.Longitud,
+                Icono = icono,
+                Orden = body.Orden,
+                CreadoEn = DateTime.UtcNow,
+            };
+
+            try
+            {
+                _context.UbicacionesGuardadas.Add(item);
+                await _context.SaveChangesAsync();
+            }
+            catch (DbUpdateException ex)
+            {
+                _logger.LogError(ex, "No se pudo crear ubicación para usuario {UserId}", userId);
+                return StatusCode(500, new { message = "No se pudo guardar la ubicación. Inicia sesión de nuevo." });
+            }
+
+            return StatusCode(StatusCodes.Status201Created, item);
         }
 
         [HttpPut("mias/{id:int}")]
-        public async Task<IActionResult> Actualizar(int id, [FromBody] UbicacionGuardada payload)
+        public async Task<IActionResult> Actualizar(int id, [FromBody] UbicacionSolicitud body)
         {
-            var userId = GetUserId();
+            if (!TryGetUserId(out var userId))
+                return Unauthorized(new { message = "Sesión inválida. Inicia sesión de nuevo." });
             var item = await _context.UbicacionesGuardadas
                 .FirstOrDefaultAsync(u => u.Id == id && u.UsuarioId == userId);
             if (item is null) return NotFound();
-            item.Etiqueta = payload.Etiqueta;
-            item.Direccion = payload.Direccion;
-            item.Latitud = payload.Latitud;
-            item.Longitud = payload.Longitud;
-            item.Icono = payload.Icono;
-            item.Orden = payload.Orden;
+
+            var icono = body.Icono?.Trim();
+            if (!string.IsNullOrEmpty(icono) && icono.Length > 20)
+                icono = icono[..20];
+
+            item.Etiqueta = body.Etiqueta.Trim();
+            item.Direccion = body.Direccion.Trim();
+            item.Latitud = body.Latitud;
+            item.Longitud = body.Longitud;
+            item.Icono = icono;
+            item.Orden = body.Orden;
             await _context.SaveChangesAsync();
             return Ok(item);
         }
@@ -68,13 +123,24 @@ namespace RutaSegura.Controllers
         [HttpDelete("mias/{id:int}")]
         public async Task<IActionResult> Eliminar(int id)
         {
-            var userId = GetUserId();
+            if (!TryGetUserId(out var userId))
+                return Unauthorized(new { message = "Sesión inválida. Inicia sesión de nuevo." });
             var item = await _context.UbicacionesGuardadas
                 .FirstOrDefaultAsync(u => u.Id == id && u.UsuarioId == userId);
             if (item is null) return NotFound();
             _context.UbicacionesGuardadas.Remove(item);
             await _context.SaveChangesAsync();
             return NoContent();
+        }
+
+        public class UbicacionSolicitud
+        {
+            public string Etiqueta { get; set; } = string.Empty;
+            public string Direccion { get; set; } = string.Empty;
+            public string? Latitud { get; set; }
+            public string? Longitud { get; set; }
+            public string? Icono { get; set; }
+            public int Orden { get; set; }
         }
     }
 }
