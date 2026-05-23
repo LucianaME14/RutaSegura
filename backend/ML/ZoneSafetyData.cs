@@ -11,6 +11,8 @@ public class ZoneSafetyTrainingRow
     public float Trafico { get; set; }
     public float Iluminacion { get; set; }
     public float Hora { get; set; }
+    /// <summary>Incidentes en las últimas horas (normalizado 0–1). Columna CSV: IncidentesRecientes.</summary>
+    public float IncidentesRecientes { get; set; }
 }
 
 public class ZoneSafetyPredictionOutput

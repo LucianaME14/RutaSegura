@@ -13,6 +13,7 @@ import { formatDistanceToNow } from "date-fns";
 import { es } from "date-fns/locale";
 import { useAuth } from "../contexts/AuthContext";
 import { apiUrl, authJsonHeaders } from "../lib/api";
+import { RiesgoMlBadge } from "../components/RiesgoMlBadge";
 type AlertaRecienteApi = {
   id: number;
   titulo: string;
@@ -355,9 +356,16 @@ export default function Home() {
                           <span className="text-base" aria-hidden>
                             {a.indicadorVisual}
                           </span>
-                          <span className="text-xs font-bold uppercase tracking-wide text-slate-600">
-                            {a.etiquetaSeguridad}
-                          </span>
+                          <RiesgoMlBadge
+                            riesgo={a.nivelSeguridad}
+                            confianza={
+                              a.confianzaMlPct != null
+                                ? a.confianzaMlPct / 100
+                                : null
+                            }
+                            indicador={a.indicadorVisual}
+                            compact
+                          />
                         </div>
                         <h3
                           className={`text-base font-bold leading-snug ${st.title}`}

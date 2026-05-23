@@ -7,11 +7,36 @@ using Microsoft.AspNetCore.StaticFiles;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Tokens;
+using Microsoft.OpenApi.Models;
 using RutaSegura.Data;
 using RutaSegura.ML;
 using RutaSegura.Services;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Entrenar modelos ML sin Swagger ni Model Builder (VS 2026): dotnet run -- --train-ml
+if (args.Contains("--train-ml", StringComparer.OrdinalIgnoreCase))
+{
+    builder.Services.AddDbContext<ApplicationDbContext>(options =>
+        options.UseSqlite(builder.Configuration.GetConnectionString("DefaultConnection")));
+    builder.Services.AddSingleton<MlCsvDatasetLoader>();
+    builder.Services.AddSingleton<MlModelTrainer>();
+
+    var trainApp = builder.Build();
+    using var scope = trainApp.Services.CreateScope();
+    var db = scope.ServiceProvider.GetRequiredService<ApplicationDbContext>();
+    await db.Database.MigrateAsync();
+    await ConfiguracionSchemaBootstrap.EnsureAlertasUmbralColumnsAsync(db);
+
+    var trainer = scope.ServiceProvider.GetRequiredService<MlModelTrainer>();
+    var result = await trainer.TrainAllAsync(db);
+
+    Console.WriteLine("Modelos ML.NET entrenados:");
+    Console.WriteLine($"  - Incidentes:     {trainer.ClassifierPath}");
+    Console.WriteLine($"  - Zonas:          {trainer.ZoneSafetyPath} (métrica {result.ZoneSafety.PrimaryMetric:P1})");
+    Console.WriteLine($"  - Rutas:          {trainer.RecommenderPath}");
+    return;
+}
 
 builder.Services
     .AddControllers()
@@ -21,7 +46,28 @@ builder.Services
         options.JsonSerializerOptions.PropertyNameCaseInsensitive = true;
     });
 builder.Services.AddEndpointsApiExplorer();
-builder.Services.AddSwaggerGen();
+builder.Services.AddSwaggerGen(options =>
+{
+    options.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
+    {
+        Name = "Authorization",
+        Type = SecuritySchemeType.Http,
+        Scheme = "Bearer",
+        BearerFormat = "JWT",
+        In = ParameterLocation.Header,
+        Description = "Solo el token JWT (sin escribir Bearer; Swagger lo agrega solo).",
+    });
+    options.AddSecurityRequirement(new OpenApiSecurityRequirement
+    {
+        {
+            new OpenApiSecurityScheme
+            {
+                Reference = new OpenApiReference { Type = ReferenceType.SecurityScheme, Id = "Bearer" },
+            },
+            Array.Empty<string>()
+        },
+    });
+});
 
 
 var frontendUrl = builder.Configuration["FRONTEND_URL"] ?? "";
@@ -66,6 +112,9 @@ builder.Services.AddSingleton<MlNetService>();
 builder.Services.AddScoped<SistemaConfigService>();
 builder.Services.AddScoped<DashboardAlertasService>();
 builder.Services.AddScoped<UsuarioPreferenciasService>();
+builder.Services.AddSingleton<MlCsvDatasetLoader>();
+builder.Services.AddScoped<MlZoneQueryService>();
+builder.Services.AddScoped<ExternalApisService>();
 builder.Services.AddHostedService<MlStartupHostedService>();
 
 

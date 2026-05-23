@@ -12,22 +12,38 @@ public class MlModelTrainer
 {
     private readonly IWebHostEnvironment _env;
     private readonly ILogger<MlModelTrainer> _logger;
+    private readonly MlCsvDatasetLoader _csv;
 
-    public MlModelTrainer(IWebHostEnvironment env, ILogger<MlModelTrainer> logger)
+    public MlModelTrainer(
+        IWebHostEnvironment env,
+        ILogger<MlModelTrainer> logger,
+        MlCsvDatasetLoader csv)
     {
         _env = env;
         _logger = logger;
+        _csv = csv;
     }
 
-    public string ArtifactsDir =>
-        Path.Combine(_env.ContentRootPath, "ML", "Artifacts");
+    public string ModelsDir => MlModelPaths.ResolveModelsDir(_env.ContentRootPath);
 
-    public string ClassifierPath => Path.Combine(ArtifactsDir, "incident-classifier.zip");
-    public string RecommenderPath => Path.Combine(ArtifactsDir, "route-recommender.zip");
-    public string ZoneSafetyPath => Path.Combine(ArtifactsDir, "zone-safety-classifier.zip");
+    public string ArtifactsDir => MlModelPaths.ResolveLegacyArtifactsDir(_env.ContentRootPath);
+
+    public string ClassifierPath => ResolveModelPath(MlModelPaths.IncidentClassifierFile);
+
+    public string RecommenderPath => ResolveModelPath(MlModelPaths.RouteRecommenderFile);
+
+    public string ZoneSafetyPath => ResolveModelPath(MlModelPaths.ZoneClassifierFile);
+
+    private string ResolveModelPath(string fileName)
+    {
+        var primary = Path.Combine(ModelsDir, fileName);
+        if (File.Exists(primary)) return primary;
+        return Path.Combine(ArtifactsDir, fileName);
+    }
 
     public async Task<MlTrainResult> TrainAllAsync(ApplicationDbContext db, CancellationToken ct = default)
     {
+        Directory.CreateDirectory(ModelsDir);
         Directory.CreateDirectory(ArtifactsDir);
         var incident = await TrainIncidentClassifierAsync(db, ct);
         var routes = await TrainRouteRecommenderAsync(db, ct);
@@ -49,7 +65,8 @@ public class MlModelTrainer
             nameof(ZoneSafetyTrainingRow.CantidadReportes),
             nameof(ZoneSafetyTrainingRow.Trafico),
             nameof(ZoneSafetyTrainingRow.Iluminacion),
-            nameof(ZoneSafetyTrainingRow.Hora));
+            nameof(ZoneSafetyTrainingRow.Hora),
+            nameof(ZoneSafetyTrainingRow.IncidentesRecientes));
 
         var trainer = ml.Transforms.Conversion.MapValueToKey("Label")
             .Append(
@@ -68,7 +85,8 @@ public class MlModelTrainer
 
         ml.Model.Save(model, split.TrainSet.Schema, ZoneSafetyPath);
         _logger.LogInformation(
-            "Clasificador de seguridad de zona guardado ({Rows} filas, macroAccuracy {Acc:P1})",
+            "Clasificador de seguridad de zona guardado en {Path} ({Rows} filas, macroAccuracy {Acc:P1})",
+            ZoneSafetyPath,
             rows.Count,
             metrics.MacroAccuracy);
 
@@ -79,7 +97,7 @@ public class MlModelTrainer
             metrics.LogLoss);
     }
 
-    internal static async Task<List<ZoneSafetyTrainingRow>> BuildZoneSafetyTrainingRowsAsync(
+    internal async Task<List<ZoneSafetyTrainingRow>> BuildZoneSafetyTrainingRowsAsync(
         ApplicationDbContext db,
         CancellationToken ct)
     {
@@ -89,12 +107,21 @@ public class MlModelTrainer
             .ToDictionary(g => g.Key, g => g.Count());
 
         var rows = new List<ZoneSafetyTrainingRow>();
+        if (_csv.ZoneCsvExists)
+            rows.AddRange(_csv.LoadZoneRows());
+
         foreach (var r in reportes.Where(r => !string.IsNullOrWhiteSpace(r.Ubicacion)))
         {
             var zona = (r.Ubicacion ?? "").Trim().ToLowerInvariant();
             var cantidad = porZona.TryGetValue(zona, out var c) ? c : 1;
             var f = ZoneFeatureBuilder.FromReporte(r, cantidad);
-            var label = InferZoneLabel(f.CantidadReportes, f.Trafico, f.Iluminacion, f.Hora);
+            var incidentes = Math.Clamp((cantidad - 1) / 4f, 0f, 1f);
+            var label = InferZoneLabel(
+                f.CantidadReportes,
+                f.Trafico,
+                f.Iluminacion,
+                f.Hora,
+                incidentes);
             rows.Add(
                 new ZoneSafetyTrainingRow
                 {
@@ -103,20 +130,28 @@ public class MlModelTrainer
                     Trafico = f.Trafico,
                     Iluminacion = f.Iluminacion,
                     Hora = f.Hora,
+                    IncidentesRecientes = incidentes,
                 });
         }
 
-        rows.AddRange(GenerateSyntheticZoneRows());
+        if (rows.Count < 8)
+            rows.AddRange(GenerateSyntheticZoneRows());
         return rows;
     }
 
-    private static string InferZoneLabel(float cantidad, float trafico, float iluminacion, float hora)
+    private static string InferZoneLabel(
+        float cantidad,
+        float trafico,
+        float iluminacion,
+        float hora,
+        float incidentesRecientes)
     {
         var riesgo =
-            cantidad * 0.42f
-            + trafico * 0.22f
-            + (1f - iluminacion) * 0.28f
-            + (hora >= 19f || hora < 6f ? 0.12f : 0f);
+            cantidad * 0.35f
+            + trafico * 0.18f
+            + (1f - iluminacion) * 0.22f
+            + (hora >= 19f || hora < 6f ? 0.10f : 0f)
+            + incidentesRecientes * 0.15f;
         if (riesgo >= 0.62f) return ZoneSafetyPresentation.Peligrosa;
         if (riesgo >= 0.38f) return ZoneSafetyPresentation.Moderada;
         return ZoneSafetyPresentation.Segura;
@@ -131,13 +166,15 @@ public class MlModelTrainer
             var trafico = (float)rnd.NextDouble();
             var iluminacion = (float)rnd.NextDouble();
             var hora = rnd.Next(0, 24) + rnd.Next(0, 60) / 60f;
+            var incidentes = (float)rnd.NextDouble();
             yield return new ZoneSafetyTrainingRow
             {
-                Label = InferZoneLabel(cantidad, trafico, iluminacion, hora),
+                Label = InferZoneLabel(cantidad, trafico, iluminacion, hora, incidentes),
                 CantidadReportes = cantidad,
                 Trafico = trafico,
                 Iluminacion = iluminacion,
                 Hora = hora,
+                IncidentesRecientes = incidentes,
             };
         }
     }
@@ -239,13 +276,18 @@ public class MlModelTrainer
         return rows;
     }
 
-    internal static async Task<List<RouteInteractionRow>> BuildRouteInteractionRowsAsync(
+    internal async Task<List<RouteInteractionRow>> BuildRouteInteractionRowsAsync(
         ApplicationDbContext db,
         CancellationToken ct)
     {
+        var rows = new List<RouteInteractionRow>();
+        if (_csv.RoutesCsvExists)
+            rows.AddRange(_csv.LoadRouteRows());
+
         var historial = await db.RutasHistorial.AsNoTracking().ToListAsync(ct);
-        var rows = historial.Select(ToRouteInteraction).ToList();
-        rows.AddRange(GenerateSyntheticRouteInteractions(historial));
+        rows.AddRange(historial.Select(ToRouteInteraction));
+        if (rows.Count < 10)
+            rows.AddRange(GenerateSyntheticRouteInteractions(historial));
         return rows;
     }
 

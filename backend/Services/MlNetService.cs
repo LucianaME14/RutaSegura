@@ -129,7 +129,8 @@ public class MlNetService
         float cantidadReportes,
         float trafico,
         float iluminacion,
-        float hora)
+        float hora,
+        float incidentesRecientes = 0f)
     {
         var input = new ZoneSafetyTrainingRow
         {
@@ -138,6 +139,7 @@ public class MlNetService
             Trafico = Math.Clamp(trafico, 0f, 1f),
             Iluminacion = Math.Clamp(iluminacion, 0f, 1f),
             Hora = Math.Clamp(hora, 0f, 23.99f),
+            IncidentesRecientes = Math.Clamp(incidentesRecientes, 0f, 1f),
         };
 
         if (_zoneSafety != null)
@@ -155,10 +157,11 @@ public class MlNetService
     private ZoneSafetyResult ClassifyZoneSafetyHeuristic(ZoneSafetyTrainingRow input)
     {
         var riesgo =
-            input.CantidadReportes * 0.42f
-            + input.Trafico * 0.22f
-            + (1f - input.Iluminacion) * 0.28f
-            + (input.Hora >= 19f || input.Hora < 6f ? 0.12f : 0f);
+            input.CantidadReportes * 0.35f
+            + input.Trafico * 0.18f
+            + (1f - input.Iluminacion) * 0.22f
+            + (input.Hora >= 19f || input.Hora < 6f ? 0.10f : 0f)
+            + input.IncidentesRecientes * 0.15f;
         var nivel = riesgo >= 0.62f
             ? ZoneSafetyPresentation.Peligrosa
             : riesgo >= 0.38f
@@ -235,17 +238,27 @@ public class MlNetService
             var key = RouteProfileKeyUtil.FromTexts(origen, destino, modo);
             var pred = _recommender.Predict(
                 new RouteRecommendationInput { UserKey = userKey, RouteProfileKey = key });
-            var stars = Math.Clamp(pred.Score, 1f, 5f);
-            list.Add(
-                new RouteRecommendationResult(
-                    id,
-                    nombre,
-                    modo,
-                    Math.Round(stars, 2),
-                    Math.Round(stars / 5f * 100, 0)));
+            var stars = SanitizeRouteScore(pred.Score);
+            var preferenceScore = SanitizeJsonNumber(Math.Round(stars, 2));
+            var seguridadPct = SanitizeJsonNumber(Math.Round(stars / 5f * 100, 0));
+            list.Add(new RouteRecommendationResult(id, nombre, modo, preferenceScore, seguridadPct));
         }
 
         return list.OrderByDescending(r => r.PreferenceScore).ToList();
+    }
+
+    private static float SanitizeRouteScore(float score)
+    {
+        if (float.IsNaN(score) || float.IsInfinity(score))
+            return 3.5f;
+        return Math.Clamp(score, 1f, 5f);
+    }
+
+    private static double SanitizeJsonNumber(double value)
+    {
+        if (double.IsNaN(value) || double.IsInfinity(value))
+            return 0;
+        return value;
     }
 
     public async Task<MlStatusDto> GetStatusAsync(CancellationToken ct = default)

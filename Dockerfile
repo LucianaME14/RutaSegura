@@ -22,6 +22,8 @@ RUN dotnet publish "backend/RutaSegura.csproj" -c Release -o /app/publish
 FROM mcr.microsoft.com/dotnet/aspnet:8.0 AS runtime
 WORKDIR /app
 COPY --from=build /app/publish .
+COPY backend/Datasets ./Datasets
+COPY backend/Models ./Models
 COPY docker-entrypoint.sh .
 RUN chmod +x docker-entrypoint.sh
 RUN mkdir -p /var/data && chmod 755 /var/data

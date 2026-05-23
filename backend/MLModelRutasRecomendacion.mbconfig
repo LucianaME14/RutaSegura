@@ -1,0 +1,263 @@
+﻿{
+  "Scenario": "Recommendation",
+  "DataSource": {
+    "Version": 3,
+    "EscapeCharacter": "\"",
+    "ReadMultiLines": false,
+    "KeepDiacritics": false,
+    "KeepPunctuations": false,
+    "AllowQuoting": false,
+    "Type": "TabularFile",
+    "FilePath": "C:\\Users\\lmore\\.vscode\\extensions\\ms-dotnettools.vscode-dotnet-pack-1.0.13\\misc\\RutaSegura\\backend\\Datasets\\rutas_recomendacion.csv",
+    "Delimiter": ",",
+    "DecimalMarker": ".",
+    "HasHeader": true,
+    "ColumnProperties": [
+      {
+        "ColumnName": "UserId",
+        "ColumnPurpose": "User",
+        "ColumnDataFormat": "Single",
+        "IsCategorical": false,
+        "Type": "Column",
+        "Version": 5
+      },
+      {
+        "ColumnName": "RouteId",
+        "ColumnPurpose": "Item",
+        "ColumnDataFormat": "Single",
+        "IsCategorical": false,
+        "Type": "Column",
+        "Version": 5
+      },
+      {
+        "ColumnName": "Label",
+        "ColumnPurpose": "Label",
+        "ColumnDataFormat": "Single",
+        "IsCategorical": false,
+        "Type": "Column",
+        "Version": 5
+      }
+    ]
+  },
+  "Environment": {
+    "Type": "LocalCPU",
+    "Version": 1
+  },
+  "RunHistory": {
+    "Version": 3,
+    "Type": "Result",
+    "Trials": [
+      {
+        "Version": 1,
+        "Type": "Trial",
+        "TrainerName": "MatrixFactorization",
+        "Score": -0.447457530780329,
+        "RuntimeInSeconds": 2.249,
+        "Parameter": {
+          "_SCHEMA_": "e0 * e1 * e2 * e3 * e4",
+          "e0": {
+            "OutputColumnName": "RouteId",
+            "InputColumnName": "RouteId",
+            "AddKeyValueAnnotationsAsText": false
+          },
+          "e1": {
+            "OutputColumnName": "UserId",
+            "InputColumnName": "UserId",
+            "AddKeyValueAnnotationsAsText": false
+          },
+          "e2": {
+            "LabelColumnName": "Label",
+            "MatrixColumnIndexColumnName": "UserId",
+            "MatrixRowIndexColumnName": "RouteId",
+            "ApproximationRank": 10,
+            "LearningRate": 0.15283048870452182,
+            "NumberOfIterations": 77,
+            "Quiet": true
+          },
+          "e3": {
+            "OutputColumnName": "UserId",
+            "InputColumnName": "UserId"
+          },
+          "e4": {
+            "OutputColumnName": "RouteId",
+            "InputColumnName": "RouteId"
+          }
+        }
+      },
+      {
+        "Version": 1,
+        "Type": "Trial",
+        "TrainerName": "MatrixFactorization",
+        "Score": -0.46647860964252336,
+        "RuntimeInSeconds": 3.631,
+        "Parameter": {
+          "_SCHEMA_": "e0 * e1 * e2 * e3 * e4",
+          "e0": {
+            "OutputColumnName": "RouteId",
+            "InputColumnName": "RouteId",
+            "AddKeyValueAnnotationsAsText": false
+          },
+          "e1": {
+            "OutputColumnName": "UserId",
+            "InputColumnName": "UserId",
+            "AddKeyValueAnnotationsAsText": false
+          },
+          "e2": {
+            "LabelColumnName": "Label",
+            "MatrixColumnIndexColumnName": "UserId",
+            "MatrixRowIndexColumnName": "RouteId",
+            "ApproximationRank": 12,
+            "LearningRate": 0.12979681645355282,
+            "NumberOfIterations": 123,
+            "Quiet": true
+          },
+          "e3": {
+            "OutputColumnName": "UserId",
+            "InputColumnName": "UserId"
+          },
+          "e4": {
+            "OutputColumnName": "RouteId",
+            "InputColumnName": "RouteId"
+          }
+        }
+      },
+      {
+        "Version": 1,
+        "Type": "Trial",
+        "TrainerName": "MatrixFactorization",
+        "Score": -0.48278580059764986,
+        "RuntimeInSeconds": 1.559,
+        "Parameter": {
+          "_SCHEMA_": "e0 * e1 * e2 * e3 * e4",
+          "e0": {
+            "OutputColumnName": "RouteId",
+            "InputColumnName": "RouteId",
+            "AddKeyValueAnnotationsAsText": false
+          },
+          "e1": {
+            "OutputColumnName": "UserId",
+            "InputColumnName": "UserId",
+            "AddKeyValueAnnotationsAsText": false
+          },
+          "e2": {
+            "LabelColumnName": "Label",
+            "MatrixColumnIndexColumnName": "UserId",
+            "MatrixRowIndexColumnName": "RouteId",
+            "ApproximationRank": 11,
+            "LearningRate": 0.11820792731518236,
+            "NumberOfIterations": 53,
+            "Quiet": true
+          },
+          "e3": {
+            "OutputColumnName": "UserId",
+            "InputColumnName": "UserId"
+          },
+          "e4": {
+            "OutputColumnName": "RouteId",
+            "InputColumnName": "RouteId"
+          }
+        }
+      },
+      {
+        "Version": 1,
+        "Type": "Trial",
+        "TrainerName": "MatrixFactorization",
+        "Score": -0.48903369832843585,
+        "RuntimeInSeconds": 8.468,
+        "Parameter": {
+          "_SCHEMA_": "e0 * e1 * e2 * e3 * e4",
+          "e0": {
+            "OutputColumnName": "RouteId",
+            "InputColumnName": "RouteId",
+            "AddKeyValueAnnotationsAsText": false
+          },
+          "e1": {
+            "OutputColumnName": "UserId",
+            "InputColumnName": "UserId",
+            "AddKeyValueAnnotationsAsText": false
+          },
+          "e2": {
+            "LabelColumnName": "Label",
+            "MatrixColumnIndexColumnName": "UserId",
+            "MatrixRowIndexColumnName": "RouteId",
+            "ApproximationRank": 11,
+            "LearningRate": 0.071728831368345555,
+            "NumberOfIterations": 291,
+            "Quiet": true
+          },
+          "e3": {
+            "OutputColumnName": "UserId",
+            "InputColumnName": "UserId"
+          },
+          "e4": {
+            "OutputColumnName": "RouteId",
+            "InputColumnName": "RouteId"
+          }
+        }
+      },
+      {
+        "Version": 1,
+        "Type": "Trial",
+        "TrainerName": "MatrixFactorization",
+        "Score": -0.51620794450867158,
+        "RuntimeInSeconds": 3.193,
+        "Parameter": {
+          "_SCHEMA_": "e0 * e1 * e2 * e3 * e4",
+          "e0": {
+            "OutputColumnName": "RouteId",
+            "InputColumnName": "RouteId",
+            "AddKeyValueAnnotationsAsText": false
+          },
+          "e1": {
+            "OutputColumnName": "UserId",
+            "InputColumnName": "UserId",
+            "AddKeyValueAnnotationsAsText": false
+          },
+          "e2": {
+            "LabelColumnName": "Label",
+            "MatrixColumnIndexColumnName": "UserId",
+            "MatrixRowIndexColumnName": "RouteId",
+            "ApproximationRank": 10,
+            "LearningRate": 0.19759384000858821,
+            "NumberOfIterations": 110,
+            "Quiet": true
+          },
+          "e3": {
+            "OutputColumnName": "UserId",
+            "InputColumnName": "UserId"
+          },
+          "e4": {
+            "OutputColumnName": "RouteId",
+            "InputColumnName": "RouteId"
+          }
+        }
+      }
+    ],
+    "Estimators": {
+      "e0": "MapValueToKey",
+      "e1": "MapValueToKey",
+      "e2": "MatrixFactorization",
+      "e3": "MapKeyToValue",
+      "e4": "MapKeyToValue"
+    },
+    "Schema": "e0 * e1 * e2 * e3 * e4",
+    "MetricName": "RSquared",
+    "ModelFilePath": "C:\\Users\\lmore\\.vscode\\extensions\\ms-dotnettools.vscode-dotnet-pack-1.0.13\\misc\\RutaSegura\\backend\\MLModelRutasRecomendacion.mlnet"
+  },
+  "Type": "TrainingConfig",
+  "Version": 5,
+  "TrainingOption": {
+    "Version": 2,
+    "Subsampling": false,
+    "Type": "RecommendationTrainingOption",
+    "TrainingTime": 120,
+    "LabelColumn": "Label",
+    "UserIdColumn": "UserId",
+    "ItemIdColumn": "RouteId",
+    "ValidationOption": {
+      "Version": 0,
+      "Type": "CrossValidationValidationOption",
+      "NumberOfFolds": 5
+    }
+  }
+}

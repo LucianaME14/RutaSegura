@@ -29,6 +29,17 @@ public static class ZoneSafetyPresentation
         };
     }
 
+    /// <summary>Etiqueta corta para API y UI: Segura, Moderada, Peligrosa.</summary>
+    public static string ToRiesgoEtiqueta(string? nivel)
+    {
+        return Normalize(nivel) switch
+        {
+            Segura => "Segura",
+            Moderada => "Moderada",
+            _ => "Peligrosa",
+        };
+    }
+
     public static string Normalize(string? nivel)
     {
         if (string.IsNullOrWhiteSpace(nivel)) return Peligrosa;

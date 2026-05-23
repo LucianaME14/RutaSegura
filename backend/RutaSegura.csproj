@@ -10,6 +10,8 @@
 
   <ItemGroup>
     <Content Update="wwwroot/**" CopyToOutputDirectory="Never" />
+    <Content Include="Datasets/**" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="Models/**" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <Target Name="WarnIfFrontendNotBuilt" BeforeTargets="Run">
@@ -23,8 +25,18 @@
     <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.0" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.JwtBearer" Version="8.0.0" />
     <PackageReference Include="Microsoft.ML" Version="4.0.1" />
+    <PackageReference Include="Microsoft.ML.AutoML" Version="0.22.1" />
     <PackageReference Include="Microsoft.ML.FastTree" Version="4.0.1" />
     <PackageReference Include="Microsoft.ML.Recommender" Version="0.22.1" />
+    <!-- Requerido por ML.NET Model Builder (AutoML) en Visual Studio 2026 -->
+    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="4.9.2">
+      <PrivateAssets>none</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+    </PackageReference>
+    <PackageReference Include="Microsoft.CodeAnalysis.Common" Version="4.9.2">
+      <PrivateAssets>none</PrivateAssets>
+      <IncludeAssets>runtime; build; native; contentfiles; analyzers</IncludeAssets>
+    </PackageReference>
     <PackageReference Include="StackExchange.Redis" Version="2.8.16" />
     <PackageReference Include="Microsoft.EntityFrameworkCore.Tools" Version="8.0.0">
       <PrivateAssets>all</PrivateAssets>

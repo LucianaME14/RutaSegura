@@ -1,0 +1,6 @@
+# Copia aquí los .zip exportados desde ML.NET Model Builder:
+# - zone-safety-classifier.zip   (Data Classification)
+# - route-recommender.zip        (Recommendation)
+# - incident-classifier.zip      (opcional)
+#
+# Si están vacíos, la API entrena automáticamente desde Datasets/*.csv al iniciar.
