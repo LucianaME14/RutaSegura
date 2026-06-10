@@ -183,8 +183,8 @@ export default function Layout() {
         ))}
       </nav>
 
-      {/* Chatbot solo en vista usuario */}
-      {!showAdminChrome && user && <SafeBot />}
+      {/* SafeBot: usuarios y administradores */}
+      {user && <SafeBot />}
     </div>
   );
 }

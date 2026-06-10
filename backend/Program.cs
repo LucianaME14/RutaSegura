@@ -8,6 +8,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.IdentityModel.Tokens;
 using Microsoft.OpenApi.Models;
+using RutaSegura.AI;
 using RutaSegura.Data;
 using RutaSegura.ML;
 using RutaSegura.Services;
@@ -152,6 +153,7 @@ builder.Services.AddScoped<ExternalApisService>();
 builder.Services.AddScoped<ReporteGeocodingService>();
 builder.Services.AddHostedService<MlStartupHostedService>();
 builder.Services.AddHostedService<AlertasInteligentesBackgroundService>();
+builder.Services.AddRutaSeguraAi(builder.Configuration);
 
 
 var jwtKey = builder.Configuration["Jwt:Key"] ?? throw new InvalidOperationException("JWT key is missing.");
