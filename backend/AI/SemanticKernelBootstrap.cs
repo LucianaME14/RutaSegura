@@ -34,6 +34,7 @@ public static class SemanticKernelBootstrap
         services.AddScoped<MlPlugin>();
         services.AddScoped<ClimaPlugin>();
         services.AddScoped<AdminPlugin>();
+        services.AddScoped<ExplicacionesPlugin>();
         services.AddScoped<SafeBotContextBuilder>();
         services.AddScoped<ISafeBotAgentService, SafeBotAgentService>();
 
@@ -52,6 +53,7 @@ public static class SemanticKernelBootstrap
             kernel.ImportPluginFromObject(sp.GetRequiredService<MlPlugin>(), "ML");
             kernel.ImportPluginFromObject(sp.GetRequiredService<ClimaPlugin>(), "Clima");
             kernel.ImportPluginFromObject(sp.GetRequiredService<AdminPlugin>(), "Admin");
+            kernel.ImportPluginFromObject(sp.GetRequiredService<ExplicacionesPlugin>(), "Explicaciones");
 
             return kernel;
         });
