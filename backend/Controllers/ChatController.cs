@@ -11,15 +11,15 @@ namespace RutaSegura.Controllers;
 public class ChatController : ControllerBase
 {
     private readonly ISafeBotAgentService _agent;
-    private readonly IOllamaService _ollama;
+    private readonly ILlmStatusService _llm;
 
-    public ChatController(ISafeBotAgentService agent, IOllamaService ollama)
+    public ChatController(ISafeBotAgentService agent, ILlmStatusService llm)
     {
         _agent = agent;
-        _ollama = ollama;
+        _llm = llm;
     }
 
-    /// <summary>SafeBot — asistente con Semantic Kernel + Ollama + plugins ML.NET.</summary>
+    /// <summary>SafeBot — Semantic Kernel + Groq/Ollama + plugins ML.NET.</summary>
     [HttpPost]
     public async Task<ActionResult<ChatApiResponse>> Post(
         [FromBody] ChatApiRequest body,
@@ -46,16 +46,17 @@ public class ChatController : ControllerBase
             Answer = result.Answer,
             LlmActivo = result.LlmActivo,
             Modelo = result.Modelo,
+            Proveedor = result.Proveedor,
             DesdeCache = result.DesdeCache,
             Fuentes = result.Fuentes,
         });
     }
 
-    /// <summary>Estado de Ollama (útil para demo y diagnóstico).</summary>
+    /// <summary>Estado del LLM (Groq u Ollama).</summary>
     [HttpGet("status")]
-    public async Task<ActionResult<OllamaStatusDto>> Status(CancellationToken ct)
+    public async Task<ActionResult<LlmStatusDto>> Status(CancellationToken ct)
     {
-        return Ok(await _ollama.GetStatusAsync(ct));
+        return Ok(await _llm.GetStatusAsync(ct));
     }
 }
 
@@ -72,6 +73,7 @@ public class ChatApiResponse
     public string Answer { get; set; } = "";
     public bool LlmActivo { get; set; }
     public string Modelo { get; set; } = "";
+    public string Proveedor { get; set; } = "";
     public bool DesdeCache { get; set; }
     public IReadOnlyList<string>? Fuentes { get; set; }
 }

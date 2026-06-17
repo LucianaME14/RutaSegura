@@ -32,6 +32,12 @@ services:
       # Opcional si solo pones host:puerto (Redis Cloud): contraseña en Redis__Password
       - key: Redis__Password
         sync: false
-      # SafeBot: sin Ollama en Render (LLM local solo en desarrollo)
+      # SafeBot: Groq en Render (LLM nube). Sin key → modo datos.
+      - key: Groq__ApiKey
+        sync: false
+      - key: Groq__Model
+        value: llama-3.1-8b-instant
+      - key: Groq__Enabled
+        value: "true"
       - key: Ollama__Enabled
         value: "false"

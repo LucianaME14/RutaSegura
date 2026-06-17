@@ -44,9 +44,10 @@ export function SafeBot() {
       .then((r) => (r.ok ? r.json() : null))
       .then((data) => {
         if (data?.disponible) {
-          setLlmStatus(`IA local: ${data.modelo}`);
+          const prov = data.proveedor === "Groq" ? "Groq" : "IA local";
+          setLlmStatus(`${prov}: ${data.modelo}`);
         } else {
-          setLlmStatus("Modo datos (sin Ollama)");
+          setLlmStatus("Modo datos (sin LLM)");
         }
       })
       .catch(() => setLlmStatus(null));
@@ -89,12 +90,13 @@ export function SafeBot() {
         answer?: string;
         llmActivo?: boolean;
         modelo?: string;
+        proveedor?: string;
         desdeCache?: boolean;
       };
 
       const meta =
         data.llmActivo && data.modelo
-          ? `${data.modelo}${data.desdeCache ? " · caché" : ""}`
+          ? `${data.proveedor ?? "LLM"} · ${data.modelo}${data.desdeCache ? " · caché" : ""}`
           : undefined;
 
       setMessages((prev) => [

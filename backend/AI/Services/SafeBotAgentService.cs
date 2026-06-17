@@ -20,6 +20,7 @@ public record ChatAgentResponse(
     string Answer,
     bool LlmActivo,
     string Modelo,
+    string Proveedor,
     bool DesdeCache,
     IReadOnlyList<string> Fuentes);
 
@@ -29,12 +30,12 @@ public interface ISafeBotAgentService
 }
 
 /// <summary>
-/// Agente SafeBot: Semantic Kernel orquesta plugins + Ollama genera respuesta natural.
+/// Agente SafeBot: Semantic Kernel orquesta plugins + Groq/Ollama genera respuesta natural.
 /// </summary>
 public class SafeBotAgentService : ISafeBotAgentService
 {
     private readonly Kernel _kernel;
-    private readonly IOllamaService _ollama;
+    private readonly ILlmStatusService _llm;
     private readonly SafeBotContextBuilder _contextBuilder;
     private readonly IChatCacheService _cache;
     private readonly ChatSessionMemory _memory;
@@ -43,7 +44,7 @@ public class SafeBotAgentService : ISafeBotAgentService
 
     public SafeBotAgentService(
         Kernel kernel,
-        IOllamaService ollama,
+        ILlmStatusService llm,
         SafeBotContextBuilder contextBuilder,
         IChatCacheService cache,
         ChatSessionMemory memory,
@@ -51,7 +52,7 @@ public class SafeBotAgentService : ISafeBotAgentService
         ILogger<SafeBotAgentService> logger)
     {
         _kernel = kernel;
-        _ollama = ollama;
+        _llm = llm;
         _contextBuilder = contextBuilder;
         _cache = cache;
         _memory = memory;
@@ -65,12 +66,15 @@ public class SafeBotAgentService : ISafeBotAgentService
     {
         var message = (request.Message ?? "").Trim();
         if (message.Length == 0)
-            return new ChatAgentResponse("Escribe tu pregunta sobre rutas, zonas o reportes.", false, _ollama.CurrentModel, false, []);
+            return new ChatAgentResponse(
+                "Escribe tu pregunta sobre rutas, zonas o reportes.",
+                false, _llm.CurrentModel, _llm.Proveedor, false, []);
 
         var cached = await _cache.GetAsync(request.UserId, message, ct);
         if (!string.IsNullOrEmpty(cached))
         {
-            return new ChatAgentResponse(cached, true, _ollama.CurrentModel, true, ["Redis"]);
+            return new ChatAgentResponse(
+                cached, true, _llm.CurrentModel, _llm.Proveedor, true, ["Redis"]);
         }
 
         var (context, fuentes) = await _contextBuilder.BuildAsync(
@@ -82,11 +86,10 @@ public class SafeBotAgentService : ISafeBotAgentService
             request.Destino,
             ct);
 
-        var lower = message.ToLowerInvariant();
         string answer;
+        var llmOk = await _llm.IsLlmAvailableAsync(ct);
 
-        var ollamaOk = await _ollama.IsAvailableAsync(ct);
-        if (ollamaOk)
+        if (llmOk)
         {
             try
             {
@@ -99,15 +102,14 @@ public class SafeBotAgentService : ISafeBotAgentService
             }
             catch (Exception ex)
             {
-                _logger.LogWarning(ex, "Error al invocar Ollama vía Semantic Kernel");
+                _logger.LogWarning(ex, "Error al invocar LLM ({Proveedor}) vía Semantic Kernel", _llm.Proveedor);
                 answer = SafeBotFallbackFormatter.Format(message, context);
             }
         }
         else
         {
             answer = SafeBotFallbackFormatter.Format(message, context);
-            // Solo sugerir instalar Ollama si está habilitado en config pero no responde (desarrollo local)
-            if (_ollamaOpts.Enabled)
+            if (_ollamaOpts.Enabled && !_llm.UsaGroq)
                 answer += " " + SafeBotPrompts.FallbackOllamaOff;
         }
 
@@ -116,8 +118,9 @@ public class SafeBotAgentService : ISafeBotAgentService
 
         return new ChatAgentResponse(
             answer,
-            ollamaOk,
-            _ollama.CurrentModel,
+            llmOk,
+            _llm.CurrentModel,
+            _llm.Proveedor,
             false,
             fuentes);
     }
@@ -144,13 +147,11 @@ public class SafeBotAgentService : ISafeBotAgentService
                 .Replace("{{$message}}", message)
                 .Replace("{{$context}}", context));
 
-#pragma warning disable SKEXP0010
         var settings = new OpenAIPromptExecutionSettings
         {
             Temperature = 0.4,
             MaxTokens = 512,
         };
-#pragma warning restore SKEXP0010
 
         var result = await chat.GetChatMessageContentAsync(history, settings, _kernel, ct);
         var content = result.Content?.Trim();
